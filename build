@@ -8,5 +8,4 @@ src_dirs="$(realpath --no-symlinks --relative-to "$PWD" $(go list -f '{{.Dir}}' 
 docker run --rm -v "$PWD:/data" cytopia/gofmt -s -w $src_dirs
 docker run --rm -v "$PWD:/data" cytopia/goimports -local github.com/KonishchevDmitry/server-metrics -w $src_dirs
 
-docker build -t server-metrics .
-docker run server-metrics
+./run
