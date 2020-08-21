@@ -8,9 +8,15 @@ import (
 )
 
 func Discover(ctx context.Context) {
-	_, ok, err := walk(ctx, "/sys/fs/cgroup/cpu", "/", func(slice *slice) error {
-		logging.L(ctx).Infof("%s", slice.name)
-		return nil
+	_, ok, err := walk(ctx, "/sys/fs/cgroup/memory", "/", func(slice *slice) (bool, error) {
+		stat, ok, err := readStat(path.Join(slice.path, "memory.stat"))
+		if !ok || err != nil {
+			return ok, err
+		}
+
+		logging.L(ctx).Infof("%s %v", slice.name, stat)
+
+		return true, nil
 	})
 	if err != nil {
 		panic(err) // FIXME
@@ -19,7 +25,7 @@ func Discover(ctx context.Context) {
 	}
 }
 
-func walk(ctx context.Context, root string, name string, handler func(slice *slice) error) (*slice, bool, error) {
+func walk(ctx context.Context, root string, name string, handler func(slice *slice) (bool, error)) (*slice, bool, error) {
 	slice := &slice{
 		name: name,
 		path: path.Join(root, name),
@@ -42,5 +48,13 @@ func walk(ctx context.Context, root string, name string, handler func(slice *sli
 		}
 	}
 
-	return slice, true, handler(slice)
+	ok, err = handler(slice)
+	if err != nil {
+		return nil, false, err
+	} else if !ok {
+		logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.path)
+		return nil, false, nil
+	}
+
+	return slice, true, nil
 }
