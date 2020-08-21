@@ -24,8 +24,13 @@ func (o *memoryObserver) controller() string {
 }
 
 func (o *memoryObserver) observe(ctx context.Context, slice *slice) (bool, error) {
-	statName := "memory.stat"
+	if hasTasks, err := slice.hasTasks(ctx); err != nil {
+		return false, err
+	} else if !hasTasks {
+		return true, nil
+	}
 
+	statName := "memory.stat"
 	stat, ok, err := readStat(path.Join(slice.path, statName))
 	if !ok || err != nil {
 		return ok, err

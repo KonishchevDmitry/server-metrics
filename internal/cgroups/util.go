@@ -41,8 +41,33 @@ func readFile(path string, reader func(file io.Reader) (bool, error)) (resOk boo
 	return ok, nil
 }
 
-func parseStat(reader io.Reader) (res map[string]int64, resOk bool, resErr error) {
+func parseStat(reader io.Reader) (map[string]int64, bool, error) {
 	stat := make(map[string]int64)
+
+	ok, err := parseFile(reader, func(line string) error {
+		tokens := strings.Split(line, " ")
+		if len(tokens) != 2 {
+			return xerrors.Errorf("Got an unexpected stat line: %q", line)
+		}
+
+		name := tokens[0]
+		if _, ok := stat[name]; ok {
+			return xerrors.Errorf("Got a duplicated %q key", name)
+		}
+
+		value, err := strconv.ParseInt(tokens[1], 10, 64)
+		if err != nil {
+			return xerrors.Errorf("Got an unexpected stat line: %q", line)
+		}
+
+		stat[name] = value
+		return nil
+	})
+
+	return stat, ok, err
+}
+
+func parseFile(reader io.Reader, parser func(line string) error) (bool, error) {
 	scanner := bufio.NewScanner(reader)
 
 	for scanner.Scan() {
@@ -51,30 +76,17 @@ func parseStat(reader io.Reader) (res map[string]int64, resOk bool, resErr error
 			continue
 		}
 
-		tokens := strings.Split(line, " ")
-		if len(tokens) != 2 {
-			return nil, false, xerrors.Errorf("Got an unexpected stat line: %q", line)
+		if err := parser(line); err != nil {
+			return false, err
 		}
-
-		name := tokens[0]
-		if _, ok := stat[name]; ok {
-			return nil, false, xerrors.Errorf("Got a duplicated %q key", name)
-		}
-
-		value, err := strconv.ParseInt(tokens[1], 10, 64)
-		if err != nil {
-			return nil, false, xerrors.Errorf("Got an unexpected stat line: %q", line)
-		}
-
-		stat[name] = value
 	}
 
 	if err := scanner.Err(); err != nil {
 		if xerrors.Is(err, syscall.ENODEV) {
 			err = nil
 		}
-		return nil, false, err
+		return false, err
 	}
 
-	return stat, true, nil
+	return true, nil
 }
