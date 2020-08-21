@@ -26,11 +26,6 @@ func Observe(ctx context.Context) {
 	}
 }
 
-type observer interface {
-	controller() string
-	observe(ctx context.Context, slice *slice, metricName string, total bool) (bool, error)
-}
-
 func walk(ctx context.Context, root string, name string, observer observer) (*slice, bool, error) {
 	metricName, total := classifySlice(name)
 
@@ -68,7 +63,6 @@ func walk(ctx context.Context, root string, name string, observer observer) (*sl
 	return slice, true, nil
 }
 
-// FIXME: Check for duplicates
 func classifySlice(name string) (string, bool) {
 	var metricName string
 	var total bool
@@ -77,7 +71,7 @@ func classifySlice(name string) (string, bool) {
 	case "/":
 		metricName = "kernel"
 	case "/docker":
-		metricName = "docker"
+		metricName = "docker-containers"
 		total = true
 	case "/init.scope":
 		metricName = "init"

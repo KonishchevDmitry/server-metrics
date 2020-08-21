@@ -11,12 +11,13 @@ import (
 )
 
 type memoryObserver struct {
+	baseObserver
 }
 
 var _ observer = &memoryObserver{}
 
 func newMemoryObserver() *memoryObserver {
-	return &memoryObserver{}
+	return &memoryObserver{makeBaseObserver()}
 }
 
 func (o *memoryObserver) controller() string {
@@ -24,6 +25,11 @@ func (o *memoryObserver) controller() string {
 }
 
 func (o *memoryObserver) observe(ctx context.Context, slice *slice, metricName string, total bool) (bool, error) {
+	if err := o.baseObserver.observe(slice.name, metricName); err != nil {
+		logging.L(ctx).Errorf("%s.", err)
+		return true, nil
+	}
+
 	if !total {
 		if hasTasks, err := slice.hasTasks(ctx); err != nil {
 			return false, err
