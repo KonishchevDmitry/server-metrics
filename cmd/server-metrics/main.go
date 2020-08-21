@@ -30,7 +30,7 @@ func run() error {
 		},
 	}
 
-	cmd.Flags().BoolP("test", "t", false, "print discovered metrics and exit")
+	cmd.Flags().Bool("devel", false, "print discovered metrics and exit")
 
 	return cmd.Execute()
 }
@@ -38,12 +38,12 @@ func run() error {
 func execute(cmd *cobra.Command) error {
 	flags := cmd.Flags()
 
-	testMode, err := flags.GetBool("test")
+	develMode, err := flags.GetBool("devel")
 	if err != nil {
 		return err
 	}
 
-	logger, err := logging.Configure()
+	logger, err := logging.Configure(develMode)
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func execute(cmd *cobra.Command) error {
 		_ = logger.Sync() // Always fails to sync stderr
 	}()
 
-	if testMode {
+	if develMode {
 		logger.Info("Running in test mode.")
 		ctx := logging.WithLogger(context.Background(), logger)
 		cgroups.Observe(ctx)
