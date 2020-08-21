@@ -1,12 +1,11 @@
-FROM golangci/golangci-lint:v1.30.0
-WORKDIR /go/src/app
-COPY . .
-RUN golangci-lint run --color always
-
 FROM golang AS build
 WORKDIR /go/src/app
+
+COPY go.mod go.sum ./
+RUN go mod download -x
+
 COPY . .
-RUN go install ./cmd/server-metrics
+RUN CGO_ENABLED=0 go install -mod=readonly ./cmd/server-metrics
 
 FROM scratch
 COPY --from=build /go/bin/server-metrics /server-metrics

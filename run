@@ -3,4 +3,4 @@
 set -eu
 
 docker build -t konishchev/server-metrics .
-docker run konishchev/server-metrics
+docker run --rm konishchev/server-metrics
