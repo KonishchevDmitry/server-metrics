@@ -3,3 +3,7 @@ run:
 
 linters:
   enable-all: true
+
+  # FIXME: Temporary broken
+  disable:
+    - gci
