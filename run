@@ -2,5 +2,6 @@
 
 set -eu
 
+export DOCKER_BUILDKIT=1
 docker build -t konishchev/server-metrics .
-docker run --rm konishchev/server-metrics
+docker run --rm -v /sys/fs/cgroup:/sys/fs/cgroup:ro konishchev/server-metrics "$@"
