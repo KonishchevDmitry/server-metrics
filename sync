@@ -2,8 +2,7 @@
 
 set -eu
 
-# FIXME
-#go get -u ./...
+go get -u -t ./...
 go mod tidy
 
 src_dirs="$(realpath --no-symlinks --relative-to "$PWD" $(go list -f '{{.Dir}}' ./...))"
