@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 
@@ -50,6 +53,8 @@ func execute(cmd *cobra.Command) error {
 
 	if testMode {
 		logger.Info("Running in test mode.")
+		ctx := logging.WithLogger(context.Background(), logger)
+		cgroups.Discover(ctx)
 	}
 	logger.Info("It works!")
 
