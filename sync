@@ -6,8 +6,12 @@ go get -u -t ./...
 go mod tidy
 
 src_dirs="$(realpath --no-symlinks --relative-to "$PWD" $(go list -f '{{.Dir}}' ./...))"
-docker run --rm -v "$PWD:/data" cytopia/gofmt -s -w $src_dirs
-docker run --rm -v "$PWD:/data" cytopia/goimports -local github.com/KonishchevDmitry/server-metrics -w $src_dirs
+
+docker run --rm -v "$PWD:/data" --entrypoint /usr/local/bin/gofmt \
+    cytopia/gofmt -s -w $src_dirs
+
+docker run --rm -v "$PWD:/data" --entrypoint /usr/local/bin/goimports \
+    cytopia/goimports -local github.com/KonishchevDmitry/server-metrics -w $src_dirs
 
 docker run --rm -t \
     -v "$PWD:/app" -w /app \
