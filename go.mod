@@ -3,8 +3,8 @@ module github.com/KonishchevDmitry/server-metrics
 go 1.14
 
 require (
-	github.com/MakeNowJust/heredoc v1.0.0 // indirect
-	github.com/lithammer/dedent v1.1.0
+	github.com/MakeNowJust/heredoc v1.0.0
+	github.com/c2h5oh/datasize v0.0.0-20200112174442-28bbd4740fee
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5 // indirect

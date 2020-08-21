@@ -4,28 +4,32 @@ import (
 	"context"
 	"path"
 
+	"golang.org/x/xerrors"
+
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
-func Discover(ctx context.Context) {
-	_, ok, err := walk(ctx, "/sys/fs/cgroup/memory", "/", func(slice *slice) (bool, error) {
-		stat, ok, err := readStat(path.Join(slice.path, "memory.stat"))
-		if !ok || err != nil {
-			return ok, err
+func Observe(ctx context.Context) {
+	for _, observer := range []observer{newMemoryObserver()} {
+		controller := observer.controller()
+		rootPath := path.Join("/sys/fs/cgroup", controller)
+
+		_, ok, err := walk(ctx, rootPath, "/", observer)
+		if err == nil && !ok {
+			err = xerrors.Errorf("%q is not mounted", rootPath)
 		}
-
-		logging.L(ctx).Infof("%s %v", slice.name, stat)
-
-		return true, nil
-	})
-	if err != nil {
-		panic(err) // FIXME
-	} else if !ok {
-		panic(ok) // FIXME
+		if err != nil {
+			logging.L(ctx).Errorf("Failed to observe %q cgroups controller: %s.", err)
+		}
 	}
 }
 
-func walk(ctx context.Context, root string, name string, handler func(slice *slice) (bool, error)) (*slice, bool, error) {
+type observer interface {
+	controller() string
+	observe(ctx context.Context, slice *slice) (bool, error)
+}
+
+func walk(ctx context.Context, root string, name string, observer observer) (*slice, bool, error) {
 	slice := &slice{
 		name: name,
 		path: path.Join(root, name),
@@ -40,7 +44,7 @@ func walk(ctx context.Context, root string, name string, handler func(slice *sli
 	}
 
 	for _, childName := range children {
-		child, ok, err := walk(ctx, root, path.Join(name, childName), handler)
+		child, ok, err := walk(ctx, root, path.Join(name, childName), observer)
 		if err != nil {
 			return nil, false, err
 		} else if ok {
@@ -48,9 +52,9 @@ func walk(ctx context.Context, root string, name string, handler func(slice *sli
 		}
 	}
 
-	ok, err = handler(slice)
+	ok, err = observer.observe(ctx, slice)
 	if err != nil {
-		return nil, false, err
+		return nil, false, xerrors.Errorf("Failed to observe %q: %w", err)
 	} else if !ok {
 		logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.path)
 		return nil, false, nil

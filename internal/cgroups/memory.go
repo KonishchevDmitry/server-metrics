@@ -1,0 +1,51 @@
+package cgroups
+
+import (
+	"context"
+	"path"
+
+	"github.com/c2h5oh/datasize"
+	"golang.org/x/xerrors"
+
+	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+)
+
+type memoryObserver struct {
+}
+
+var _ observer = &memoryObserver{}
+
+func newMemoryObserver() *memoryObserver {
+	return &memoryObserver{}
+}
+
+func (o *memoryObserver) controller() string {
+	return "memory"
+}
+
+func (o *memoryObserver) observe(ctx context.Context, slice *slice) (bool, error) {
+	statName := "memory.stat"
+
+	stat, ok, err := readStat(path.Join(slice.path, statName))
+	if !ok || err != nil {
+		return ok, err
+	}
+
+	var getErr error
+	get := func(name string) int64 {
+		value, ok := stat[name]
+		if !ok {
+			getErr = xerrors.Errorf("%q entry of %q is missing", name, statName)
+		}
+		return value
+	}
+
+	cache := get("cache")
+	rss := get("rss") + get("rss_huge")
+	if getErr != nil {
+		return false, getErr
+	}
+
+	logging.L(ctx).Infof("%s: rss=%s, cache=%s", slice.name, datasize.ByteSize(rss), datasize.ByteSize(cache))
+	return true, nil
+}

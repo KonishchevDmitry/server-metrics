@@ -54,7 +54,7 @@ func execute(cmd *cobra.Command) error {
 	if testMode {
 		logger.Info("Running in test mode.")
 		ctx := logging.WithLogger(context.Background(), logger)
-		cgroups.Discover(ctx)
+		cgroups.Observe(ctx)
 	}
 	logger.Info("It works!")
 
