@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
-
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
-
 	"github.com/spf13/cobra"
+
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
+	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
 func run() error {

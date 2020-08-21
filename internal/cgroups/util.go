@@ -35,10 +35,10 @@ func readFile(path string, reader func(file io.Reader) (bool, error)) (resOk boo
 
 	ok, err := reader(file)
 	if err != nil {
-		err = xerrors.Errorf("Failed to read %q: %w", err)
+		err = xerrors.Errorf("Failed to read %q: %w", path, err)
 	}
 
-	return ok, nil
+	return ok, err
 }
 
 func parseStat(reader io.Reader) (map[string]int64, bool, error) {

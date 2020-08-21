@@ -5,4 +5,7 @@ linters:
   enable-all: true
   disable:
     - gci
+    - gomnd
+    - nlreturn
+    - testpackage
     - wsl

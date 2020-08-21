@@ -54,7 +54,7 @@ func walk(ctx context.Context, root string, name string, observer observer) (*sl
 	}
 
 	if ok, err := observer.observe(ctx, slice, metricName, total); err != nil {
-		return nil, false, xerrors.Errorf("Failed to observe %q: %w", err)
+		return nil, false, xerrors.Errorf("Failed to observe %q: %w", slice.path, err)
 	} else if !ok {
 		logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.path)
 		return nil, false, nil
