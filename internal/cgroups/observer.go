@@ -8,7 +8,7 @@ import (
 
 type observer interface {
 	controller() string
-	observe(ctx context.Context, slice *slice, metricName string, total bool) (bool, error)
+	observe(ctx context.Context, slice *slice, serviceName string, total bool) (bool, error)
 }
 
 type baseObserver struct {
@@ -19,11 +19,11 @@ func makeBaseObserver() baseObserver {
 	return baseObserver{make(map[string]string)}
 }
 
-func (o *baseObserver) observe(sliceName string, metricName string) error {
-	if otherName, ok := o.metrics[metricName]; ok {
-		return xerrors.Errorf("Both %q and %q results to %q metric", otherName, sliceName, metricName)
+func (o *baseObserver) observe(sliceName string, serviceName string) error {
+	if otherName, ok := o.metrics[serviceName]; ok {
+		return xerrors.Errorf("Both %q and %q resolve to %q service", otherName, sliceName, serviceName)
 	}
 
-	o.metrics[metricName] = sliceName
+	o.metrics[serviceName] = sliceName
 	return nil
 }

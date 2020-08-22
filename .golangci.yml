@@ -4,7 +4,10 @@ run:
 linters:
   enable-all: true
   disable:
+    - gochecknoglobals
+    - gochecknoinits
     - gci
+    - gofumpt
     - gomnd
     - nlreturn
     - testpackage

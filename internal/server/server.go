@@ -1,35 +1,33 @@
 package server
 
 import (
+	"context"
 	"net/http"
-	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.uber.org/zap"
+
+	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+
+	"golang.org/x/sync/semaphore"
+
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func recordMetrics() {
-	go func() {
-		for {
-			opsProcessed.Inc()
-			time.Sleep(2 * time.Second)
-		}
-	}()
-}
-
-var (
-	opsProcessed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "myapp_processed_ops_total",
-		Help: "The total number of processed events",
-	})
-)
-
-func Start() error {
-	recordMetrics()
-
+func Start(logger *zap.SugaredLogger, collect func(ctx context.Context)) error {
+	lock := semaphore.NewWeighted(1)
 	prometheusHandler := promhttp.Handler()
+
 	http.HandleFunc("/metrics", func(writer http.ResponseWriter, request *http.Request) {
+		ctx := logging.WithLogger(request.Context(), logger)
+
+		if lock.Acquire(ctx, 1) != nil {
+			return
+		}
+		func() {
+			defer lock.Release(1)
+			collect(ctx)
+		}()
+
 		prometheusHandler.ServeHTTP(writer, request)
 	})
 

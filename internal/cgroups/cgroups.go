@@ -10,7 +10,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
-func Observe(ctx context.Context) {
+func Collect(ctx context.Context) {
 	for _, observer := range []observer{newMemoryObserver()} {
 		controller := observer.controller()
 		rootPath := path.Join("/sys/fs/cgroup", controller)
@@ -27,7 +27,7 @@ func Observe(ctx context.Context) {
 }
 
 func walk(ctx context.Context, root string, name string, observer observer) (*slice, bool, error) {
-	metricName, total := classifySlice(name)
+	serviceName, total := classifySlice(name)
 
 	slice := &slice{
 		name: name,
@@ -53,7 +53,7 @@ func walk(ctx context.Context, root string, name string, observer observer) (*sl
 		}
 	}
 
-	if ok, err := observer.observe(ctx, slice, metricName, total); err != nil {
+	if ok, err := observer.observe(ctx, slice, serviceName, total); err != nil {
 		return nil, false, xerrors.Errorf("Failed to observe %q: %w", slice.path, err)
 	} else if !ok {
 		logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.path)
@@ -64,29 +64,29 @@ func walk(ctx context.Context, root string, name string, observer observer) (*sl
 }
 
 func classifySlice(name string) (string, bool) {
-	var metricName string
+	var serviceName string
 	var total bool
 
 	switch name {
 	case "/":
-		metricName = "kernel"
+		serviceName = "kernel"
 	case "/docker":
-		metricName = "docker-containers"
+		serviceName = "docker-containers"
 		total = true
 	case "/init.scope":
-		metricName = "init"
+		serviceName = "init"
 	case "/user.slice":
-		metricName = "user"
+		serviceName = "user"
 		total = true
 	default:
 		if strings.HasPrefix(name, "/system.slice/") {
-			metricName = path.Base(name)
-			metricName = strings.TrimSuffix(metricName, ".service")
-			metricName = strings.ReplaceAll(metricName, `\x2d`, `-`)
+			serviceName = path.Base(name)
+			serviceName = strings.TrimSuffix(serviceName, ".service")
+			serviceName = strings.ReplaceAll(serviceName, `\x2d`, `-`)
 		} else {
-			metricName = name
+			serviceName = name
 		}
 	}
 
-	return metricName, total
+	return serviceName, total
 }

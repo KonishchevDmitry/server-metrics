@@ -54,15 +54,15 @@ func execute(cmd *cobra.Command) error {
 
 	if develMode {
 		logger.Info("Running in test mode.")
-		ctx := logging.WithLogger(context.Background(), logger)
-		cgroups.Observe(ctx)
-	} else {
-		if err := server.Start(); err != nil {
-			return err
-		}
+		collect(logging.WithLogger(context.Background(), logger))
+		return nil
 	}
 
-	return nil
+	return server.Start(logger, collect)
+}
+
+func collect(ctx context.Context) {
+	cgroups.Collect(ctx)
 }
 
 func main() {

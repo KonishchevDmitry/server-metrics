@@ -5,10 +5,37 @@ import (
 	"path"
 
 	"github.com/c2h5oh/datasize"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
+
+var rssMetric = prometheus.NewGaugeVec(
+	prometheus.GaugeOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: metrics.MemorySubsystem,
+		Name:      "rss",
+		Help:      "Anonymous and swap cache memory usage.",
+	},
+	[]string{metrics.ServiceLabel},
+)
+
+var cacheMetric = prometheus.NewGaugeVec(
+	prometheus.GaugeOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: metrics.MemorySubsystem,
+		Name:      "cache",
+		Help:      "Page cache memory usage.",
+	},
+	[]string{metrics.ServiceLabel},
+)
+
+func init() {
+	prometheus.MustRegister(rssMetric)
+	prometheus.MustRegister(cacheMetric)
+}
 
 type memoryObserver struct {
 	baseObserver
@@ -24,8 +51,8 @@ func (o *memoryObserver) controller() string {
 	return "memory"
 }
 
-func (o *memoryObserver) observe(ctx context.Context, slice *slice, metricName string, total bool) (bool, error) {
-	if err := o.baseObserver.observe(slice.name, metricName); err != nil {
+func (o *memoryObserver) observe(ctx context.Context, slice *slice, serviceName string, total bool) (bool, error) {
+	if err := o.baseObserver.observe(slice.name, serviceName); err != nil {
 		logging.L(ctx).Errorf("%s.", err)
 		return true, nil
 	}
@@ -64,6 +91,9 @@ func (o *memoryObserver) observe(ctx context.Context, slice *slice, metricName s
 		return false, getErr
 	}
 
-	logging.L(ctx).Infof("* %s: rss=%s, cache=%s", metricName, datasize.ByteSize(rss), datasize.ByteSize(cache))
+	logging.L(ctx).Debugf("* %s: rss=%s, cache=%s", serviceName, datasize.ByteSize(rss), datasize.ByteSize(cache))
+	rssMetric.With(metrics.Labels(serviceName)).Set(float64(rss))
+	cacheMetric.With(metrics.Labels(serviceName)).Set(float64(rss))
+
 	return true, nil
 }
