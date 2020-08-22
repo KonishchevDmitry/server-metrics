@@ -2,5 +2,8 @@
 
 export DOCKER_BUILDKIT=1
 docker build --pull --tag konishchev/server-metrics:stable .
+
+docker stop server-metrics > /dev/null ||:
+docker rm server-metrics > /dev/null ||:
 docker run --pid host --read-only --detach --publish 9101:9101 --restart unless-stopped \
-    --name server-metrics konishchev/server-metrics:stable "$@"
+    --name server-metrics konishchev/server-metrics:stable "$@" > /dev/null
