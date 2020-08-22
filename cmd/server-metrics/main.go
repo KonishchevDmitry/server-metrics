@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/server"
+
 	"github.com/spf13/cobra"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
@@ -54,8 +56,11 @@ func execute(cmd *cobra.Command) error {
 		logger.Info("Running in test mode.")
 		ctx := logging.WithLogger(context.Background(), logger)
 		cgroups.Observe(ctx)
+	} else {
+		if err := server.Start(); err != nil {
+			return err
+		}
 	}
-	logger.Info("It works!")
 
 	return nil
 }

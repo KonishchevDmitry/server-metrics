@@ -4,4 +4,4 @@ set -eu
 
 export DOCKER_BUILDKIT=1
 docker build -t konishchev/server-metrics .
-docker run --rm -v /sys/fs/cgroup:/sys/fs/cgroup:ro --pid=host konishchev/server-metrics "$@"
+docker run --rm -v /sys/fs/cgroup:/sys/fs/cgroup:ro --pid=host -p 9101:9101 konishchev/server-metrics "$@"

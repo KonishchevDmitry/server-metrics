@@ -13,4 +13,5 @@ RUN --mount=type=cache,id=go,target=/cache \
 FROM scratch
 COPY --from=build /go/bin/server-metrics /server-metrics
 USER 1:1
+EXPOSE 9101
 ENTRYPOINT ["/server-metrics"]
