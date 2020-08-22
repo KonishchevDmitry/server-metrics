@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+export DOCKER_BUILDKIT=1
+docker build --pull --tag konishchev/server-metrics:stable .
+docker run --pid host --read-only --detach --publish 9101:9101 --restart unless-stopped \
+    --name server-metrics konishchev/server-metrics:stable "$@"
