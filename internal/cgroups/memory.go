@@ -93,7 +93,7 @@ func (o *memoryObserver) observe(ctx context.Context, slice *slice, serviceName 
 
 	logging.L(ctx).Debugf("* %s: rss=%s, cache=%s", serviceName, datasize.ByteSize(rss), datasize.ByteSize(cache))
 	rssMetric.With(metrics.Labels(serviceName)).Set(float64(rss))
-	cacheMetric.With(metrics.Labels(serviceName)).Set(float64(rss))
+	cacheMetric.With(metrics.Labels(serviceName)).Set(float64(cache))
 
 	return true, nil
 }
