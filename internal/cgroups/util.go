@@ -12,8 +12,8 @@ import (
 )
 
 func ReadStat(path string) (stat map[string]int64, exists bool, err error) {
-	exists, err = ReadFile(path, func(file io.Reader) (ok bool, err error) {
-		stat, ok, err = parseStat(file)
+	exists, err = ReadFile(path, func(file io.Reader) (exists bool, err error) {
+		stat, exists, err = parseStat(file)
 		return
 	})
 	return

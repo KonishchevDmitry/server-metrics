@@ -1,4 +1,4 @@
-package block
+package blkio
 
 import (
 	"strings"
@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseBlockStat(t *testing.T) {
-	stats, ok, err := parseBlockStat(strings.NewReader(heredoc.Doc(`
+func TestParseStat(t *testing.T) {
+	stats, ok, err := parseStat(strings.NewReader(heredoc.Doc(`
 		8:16 Read 214
 		8:16 Write 71
 		8:16 Sync 284
@@ -32,7 +32,7 @@ func TestParseBlockStat(t *testing.T) {
 	`)))
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, []blockStat{
+	require.Equal(t, []stat{
 		{device: "8:16", read: 214, write: 71},
 		{device: "8:0", read: 395, write: 71},
 		{device: "9:0", read: 609, write: 55},

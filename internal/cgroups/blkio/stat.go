@@ -1,4 +1,4 @@
-package block
+package blkio
 
 import (
 	"io"
@@ -10,14 +10,22 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 )
 
-type blockStat struct {
+type stat struct {
 	device string
 	read   int64
 	write  int64
 }
 
-func parseBlockStat(reader io.Reader) ([]blockStat, bool, error) {
-	parser := makeBlockStatParser()
+func readStat(path string) (stats []stat, exists bool, err error) {
+	exists, err = cgroups.ReadFile(path, func(file io.Reader) (exists bool, err error) {
+		stats, exists, err = parseStat(file)
+		return
+	})
+	return
+}
+
+func parseStat(reader io.Reader) ([]stat, bool, error) {
+	parser := makeStatParser()
 
 	if exists, err := cgroups.ParseFile(reader, parser.parse); err != nil || !exists {
 		return nil, exists, err
@@ -27,30 +35,30 @@ func parseBlockStat(reader io.Reader) ([]blockStat, bool, error) {
 	return stats, true, err
 }
 
-type blockStatParser struct {
-	stats    []blockStat
-	current  blockStat
+type statParser struct {
+	stats    []stat
+	current  stat
 	gotTotal bool
 }
 
-func makeBlockStatParser() blockStatParser {
-	p := blockStatParser{}
+func makeStatParser() statParser {
+	p := statParser{}
 	p.resetCurrent()
 	return p
 }
 
-func (p *blockStatParser) resetCurrent() {
-	p.current = blockStat{
+func (p *statParser) resetCurrent() {
+	p.current = stat{
 		read:  -1,
 		write: -1,
 	}
 }
 
-func (p *blockStatParser) currentParsed() bool {
+func (p *statParser) currentParsed() bool {
 	return p.current.device != "" && p.current.read != -1 && p.current.write != -1
 }
 
-func (p *blockStatParser) finalizeCurrent() bool {
+func (p *statParser) finalizeCurrent() bool {
 	if !p.currentParsed() {
 		return false
 	}
@@ -61,14 +69,14 @@ func (p *blockStatParser) finalizeCurrent() bool {
 	return true
 }
 
-func (p *blockStatParser) parse(line string) error {
+func (p *statParser) parse(line string) error {
 	if !p.tryParse(line) {
-		return xerrors.Errorf("Got an unexpected block stat line: %q", line)
+		return xerrors.Errorf("Got an unexpected blkio stat line: %q", line)
 	}
 	return nil
 }
 
-func (p *blockStatParser) tryParse(line string) bool {
+func (p *statParser) tryParse(line string) bool {
 	if p.gotTotal {
 		return false
 	}
@@ -113,10 +121,10 @@ func (p *blockStatParser) tryParse(line string) bool {
 	return true
 }
 
-func (p *blockStatParser) consume() ([]blockStat, error) {
+func (p *statParser) consume() ([]stat, error) {
 	if p.current.device != "" {
 		if !p.finalizeCurrent() {
-			return nil, xerrors.Errorf("Got an unexpected end of block stat file")
+			return nil, xerrors.Errorf("Got an unexpected end of blkio stat file")
 		}
 	}
 	return p.stats, nil

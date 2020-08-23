@@ -13,10 +13,12 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
 
+const controller = "memory"
+
 var rssMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
 		Namespace: metrics.Namespace,
-		Subsystem: metrics.MemorySubsystem,
+		Subsystem: controller,
 		Name:      "rss",
 		Help:      "Anonymous and swap cache memory usage.",
 	},
@@ -26,7 +28,7 @@ var rssMetric = prometheus.NewGaugeVec(
 var cacheMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
 		Namespace: metrics.Namespace,
-		Subsystem: metrics.MemorySubsystem,
+		Subsystem: controller,
 		Name:      "cache",
 		Help:      "Page cache memory usage.",
 	},
@@ -38,34 +40,20 @@ func init() {
 	prometheus.MustRegister(cacheMetric)
 }
 
-type Observer struct {
-	cgroups.BaseObserver
+type Collector struct {
 }
 
-var _ cgroups.Observer = &Observer{}
+var _ cgroups.Collector = &Collector{}
 
-func NewObserver() *Observer {
-	return &Observer{cgroups.MakeBaseObserver()}
+func NewCollector() *Collector {
+	return &Collector{}
 }
 
-func (o *Observer) Controller() string {
-	return "memory"
+func (o *Collector) Controller() string {
+	return controller
 }
 
-func (o *Observer) Observe(ctx context.Context, slice *cgroups.Slice, serviceName string, total bool) (bool, error) {
-	if err := o.BaseObserver.Observe(slice.Name, serviceName); err != nil {
-		logging.L(ctx).Errorf("%s.", err)
-		return true, nil
-	}
-
-	if !total {
-		if hasTasks, err := slice.HasTasks(ctx); err != nil {
-			return false, err
-		} else if !hasTasks {
-			return true, nil
-		}
-	}
-
+func (o *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
 	statName := "memory.stat"
 	stat, exists, err := cgroups.ReadStat(path.Join(slice.Path, statName))
 	if !exists || err != nil {
@@ -74,7 +62,7 @@ func (o *Observer) Observe(ctx context.Context, slice *cgroups.Slice, serviceNam
 
 	var getErr error
 	get := func(name string) int64 {
-		if total {
+		if slice.Total {
 			name = "total_" + name
 		}
 
@@ -92,9 +80,9 @@ func (o *Observer) Observe(ctx context.Context, slice *cgroups.Slice, serviceNam
 		return false, getErr
 	}
 
-	logging.L(ctx).Debugf("* %s: rss=%s, cache=%s", serviceName, datasize.ByteSize(rss), datasize.ByteSize(cache))
-	rssMetric.With(metrics.Labels(serviceName)).Set(float64(rss))
-	cacheMetric.With(metrics.Labels(serviceName)).Set(float64(cache))
+	logging.L(ctx).Debugf("* %s: rss=%s, cache=%s", slice.Service, datasize.ByteSize(rss), datasize.ByteSize(cache))
+	rssMetric.With(metrics.Labels(slice.Service)).Set(float64(rss))
+	cacheMetric.With(metrics.Labels(slice.Service)).Set(float64(cache))
 
 	return true, nil
 }

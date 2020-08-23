@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 
@@ -15,8 +16,21 @@ import (
 
 type Slice struct {
 	Name     string
+	Service  string
 	Path     string
 	Children []*Slice
+	Total    bool
+}
+
+func NewSlice(rootPath string, name string) *Slice {
+	service, total := classifySlice(name)
+
+	return &Slice{
+		Name:    name,
+		Service: service,
+		Path:    path.Join(rootPath, name),
+		Total:   total,
+	}
 }
 
 func (s *Slice) HasTasks(ctx context.Context) (bool, error) {
@@ -58,4 +72,32 @@ func ListSlice(path string) ([]string, bool, error) {
 	}
 
 	return children, true, nil
+}
+
+func classifySlice(name string) (string, bool) {
+	var service string
+	var total bool
+
+	switch name {
+	case "/":
+		service = "kernel"
+	case "/docker":
+		service = "docker-containers"
+		total = true
+	case "/init.scope":
+		service = "init"
+	case "/user.slice":
+		service = "user"
+		total = true
+	default:
+		if strings.HasPrefix(name, "/system.slice/") {
+			service = path.Base(name)
+			service = strings.TrimSuffix(service, ".service")
+			service = strings.ReplaceAll(service, `\x2d`, `-`)
+		} else {
+			service = name
+		}
+	}
+
+	return service, total
 }
