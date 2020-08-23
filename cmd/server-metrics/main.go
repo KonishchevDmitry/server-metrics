@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
+
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
 
 	"github.com/spf13/cobra"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
@@ -62,7 +63,7 @@ func execute(cmd *cobra.Command) error {
 }
 
 func collect(ctx context.Context) {
-	cgroups.Collect(ctx)
+	collector.Collect(ctx)
 }
 
 func main() {

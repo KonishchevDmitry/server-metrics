@@ -1,4 +1,4 @@
-package cgroups
+package block
 
 import (
 	"io"
@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"golang.org/x/xerrors"
+
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 )
 
 type blockStat struct {
@@ -17,7 +19,7 @@ type blockStat struct {
 func parseBlockStat(reader io.Reader) ([]blockStat, bool, error) {
 	parser := makeBlockStatParser()
 
-	if exists, err := parseFile(reader, parser.parse); err != nil || !exists {
+	if exists, err := cgroups.ParseFile(reader, parser.parse); err != nil || !exists {
 		return nil, exists, err
 	}
 

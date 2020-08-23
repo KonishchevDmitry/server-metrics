@@ -1,22 +1,25 @@
-package cgroups
+package collector
 
 import (
 	"context"
 	"path"
 	"strings"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
+
 	"golang.org/x/xerrors"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/memory"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
 func Collect(ctx context.Context) {
-	for _, observer := range []observer{newMemoryObserver()} {
-		controller := observer.controller()
+	for _, observer := range []cgroups.Observer{memory.NewObserver()} {
+		controller := observer.Controller()
 		rootPath := path.Join("/sys/fs/cgroup", controller)
 
 		logging.L(ctx).Debugf("%s controller:", controller)
-		_, exists, err := walk(ctx, rootPath, "/", observer)
+		_, exists, err := observe(ctx, rootPath, "/", observer)
 		if err == nil && !exists {
 			err = xerrors.Errorf("%q is not mounted", rootPath)
 		}
@@ -26,37 +29,37 @@ func Collect(ctx context.Context) {
 	}
 }
 
-func walk(ctx context.Context, root string, name string, observer observer) (*slice, bool, error) {
+func observe(ctx context.Context, root string, name string, observer cgroups.Observer) (*cgroups.Slice, bool, error) {
 	serviceName, total := classifySlice(name)
 
-	slice := &slice{
-		name: name,
-		path: path.Join(root, name),
+	slice := &cgroups.Slice{
+		Name: name,
+		Path: path.Join(root, name),
 	}
 
 	if !total {
-		children, exists, err := listSlice(slice.path)
+		children, exists, err := cgroups.ListSlice(slice.Path)
 		if err != nil {
 			return nil, false, err
 		} else if !exists {
-			logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.path)
+			logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.Path)
 			return nil, false, nil
 		}
 
 		for _, childName := range children {
-			child, exists, err := walk(ctx, root, path.Join(name, childName), observer)
+			child, exists, err := observe(ctx, root, path.Join(name, childName), observer)
 			if err != nil {
 				return nil, false, err
 			} else if exists {
-				slice.children = append(slice.children, child)
+				slice.Children = append(slice.Children, child)
 			}
 		}
 	}
 
-	if exists, err := observer.observe(ctx, slice, serviceName, total); err != nil {
-		return nil, false, xerrors.Errorf("Failed to observe %q: %w", slice.path, err)
+	if exists, err := observer.Observe(ctx, slice, serviceName, total); err != nil {
+		return nil, false, xerrors.Errorf("Failed to observe %q: %w", slice.Path, err)
 	} else if !exists {
-		logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.path)
+		logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.Path)
 		return nil, false, nil
 	}
 

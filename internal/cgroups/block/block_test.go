@@ -1,4 +1,4 @@
-package cgroups
+package block
 
 import (
 	"strings"

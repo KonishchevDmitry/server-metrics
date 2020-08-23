@@ -1,4 +1,4 @@
-package cgroups
+package memory
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/xerrors"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
@@ -37,28 +38,28 @@ func init() {
 	prometheus.MustRegister(cacheMetric)
 }
 
-type memoryObserver struct {
-	baseObserver
+type Observer struct {
+	cgroups.BaseObserver
 }
 
-var _ observer = &memoryObserver{}
+var _ cgroups.Observer = &Observer{}
 
-func newMemoryObserver() *memoryObserver {
-	return &memoryObserver{makeBaseObserver()}
+func NewObserver() *Observer {
+	return &Observer{cgroups.MakeBaseObserver()}
 }
 
-func (o *memoryObserver) controller() string {
+func (o *Observer) Controller() string {
 	return "memory"
 }
 
-func (o *memoryObserver) observe(ctx context.Context, slice *slice, serviceName string, total bool) (bool, error) {
-	if err := o.baseObserver.observe(slice.name, serviceName); err != nil {
+func (o *Observer) Observe(ctx context.Context, slice *cgroups.Slice, serviceName string, total bool) (bool, error) {
+	if err := o.BaseObserver.Observe(slice.Name, serviceName); err != nil {
 		logging.L(ctx).Errorf("%s.", err)
 		return true, nil
 	}
 
 	if !total {
-		if hasTasks, err := slice.hasTasks(ctx); err != nil {
+		if hasTasks, err := slice.HasTasks(ctx); err != nil {
 			return false, err
 		} else if !hasTasks {
 			return true, nil
@@ -66,7 +67,7 @@ func (o *memoryObserver) observe(ctx context.Context, slice *slice, serviceName 
 	}
 
 	statName := "memory.stat"
-	stat, exists, err := readStat(path.Join(slice.path, statName))
+	stat, exists, err := cgroups.ReadStat(path.Join(slice.Path, statName))
 	if !exists || err != nil {
 		return exists, err
 	}
