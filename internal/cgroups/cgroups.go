@@ -16,8 +16,8 @@ func Collect(ctx context.Context) {
 		rootPath := path.Join("/sys/fs/cgroup", controller)
 
 		logging.L(ctx).Debugf("%s controller:", controller)
-		_, ok, err := walk(ctx, rootPath, "/", observer)
-		if err == nil && !ok {
+		_, exists, err := walk(ctx, rootPath, "/", observer)
+		if err == nil && !exists {
 			err = xerrors.Errorf("%q is not mounted", rootPath)
 		}
 		if err != nil {
@@ -35,27 +35,27 @@ func walk(ctx context.Context, root string, name string, observer observer) (*sl
 	}
 
 	if !total {
-		children, ok, err := listSlice(slice.path)
+		children, exists, err := listSlice(slice.path)
 		if err != nil {
 			return nil, false, err
-		} else if !ok {
+		} else if !exists {
 			logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.path)
 			return nil, false, nil
 		}
 
 		for _, childName := range children {
-			child, ok, err := walk(ctx, root, path.Join(name, childName), observer)
+			child, exists, err := walk(ctx, root, path.Join(name, childName), observer)
 			if err != nil {
 				return nil, false, err
-			} else if ok {
+			} else if exists {
 				slice.children = append(slice.children, child)
 			}
 		}
 	}
 
-	if ok, err := observer.observe(ctx, slice, serviceName, total); err != nil {
+	if exists, err := observer.observe(ctx, slice, serviceName, total); err != nil {
 		return nil, false, xerrors.Errorf("Failed to observe %q: %w", slice.path, err)
-	} else if !ok {
+	} else if !exists {
 		logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.path)
 		return nil, false, nil
 	}

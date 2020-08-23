@@ -9,7 +9,7 @@ import (
 )
 
 func TestParseStat(t *testing.T) {
-	stat, ok, err := parseStat(strings.NewReader(heredoc.Doc(`
+	stat, exists, err := parseStat(strings.NewReader(heredoc.Doc(`
 		cache 1757184
 		rss 5406720
 		rss_huge 0
@@ -45,7 +45,7 @@ func TestParseStat(t *testing.T) {
 		total_unevictable 0
 	`)))
 	require.NoError(t, err)
-	require.True(t, ok)
+	require.True(t, exists)
 	require.Len(t, stat, 33)
 	require.Equal(t, int64(1757184), stat["total_cache"])
 }

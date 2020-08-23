@@ -66,9 +66,9 @@ func (o *memoryObserver) observe(ctx context.Context, slice *slice, serviceName 
 	}
 
 	statName := "memory.stat"
-	stat, ok, err := readStat(path.Join(slice.path, statName))
-	if !ok || err != nil {
-		return ok, err
+	stat, exists, err := readStat(path.Join(slice.path, statName))
+	if !exists || err != nil {
+		return exists, err
 	}
 
 	var getErr error

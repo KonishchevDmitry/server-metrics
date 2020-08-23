@@ -11,15 +11,15 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func readStat(path string) (stat map[string]int64, ok bool, err error) {
-	ok, err = readFile(path, func(file io.Reader) (ok bool, err error) {
+func readStat(path string) (stat map[string]int64, exists bool, err error) {
+	exists, err = readFile(path, func(file io.Reader) (ok bool, err error) {
 		stat, ok, err = parseStat(file)
 		return
 	})
 	return
 }
 
-func readFile(path string, reader func(file io.Reader) (bool, error)) (resOk bool, resErr error) {
+func readFile(path string, reader func(file io.Reader) (bool, error)) (resExists bool, resErr error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -33,18 +33,18 @@ func readFile(path string, reader func(file io.Reader) (bool, error)) (resOk boo
 		}
 	}()
 
-	ok, err := reader(file)
+	exists, err := reader(file)
 	if err != nil {
 		err = xerrors.Errorf("Failed to read %q: %w", path, err)
 	}
 
-	return ok, err
+	return exists, err
 }
 
 func parseStat(reader io.Reader) (map[string]int64, bool, error) {
 	stat := make(map[string]int64)
 
-	ok, err := parseFile(reader, func(line string) error {
+	exists, err := parseFile(reader, func(line string) error {
 		tokens := strings.Split(line, " ")
 		if len(tokens) != 2 {
 			return xerrors.Errorf("Got an unexpected stat line: %q", line)
@@ -64,7 +64,7 @@ func parseStat(reader io.Reader) (map[string]int64, bool, error) {
 		return nil
 	})
 
-	return stat, ok, err
+	return stat, exists, err
 }
 
 func parseFile(reader io.Reader, parser func(line string) error) (bool, error) {

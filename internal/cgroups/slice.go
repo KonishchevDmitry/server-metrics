@@ -22,7 +22,7 @@ type slice struct {
 func (s *slice) hasTasks(ctx context.Context) (bool, error) {
 	var hasTasks bool
 
-	if ok, err := readFile(path.Join(s.path, "tasks"), func(file io.Reader) (bool, error) {
+	if exists, err := readFile(path.Join(s.path, "tasks"), func(file io.Reader) (bool, error) {
 		return parseFile(file, func(line string) error {
 			if _, err := strconv.ParseInt(line, 10, 32); err != nil {
 				return xerrors.Errorf("Task ID is expected, but got %q line", line)
@@ -32,7 +32,7 @@ func (s *slice) hasTasks(ctx context.Context) (bool, error) {
 		})
 	}); err != nil {
 		return false, err
-	} else if !ok {
+	} else if !exists {
 		logging.L(ctx).Debugf("%q has been deleted during discovering.", s.path)
 		return false, nil
 	}
