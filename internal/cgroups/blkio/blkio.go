@@ -2,10 +2,10 @@ package blkio
 
 import (
 	"context"
+	"os"
 	"path"
 
 	"github.com/c2h5oh/datasize"
-
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
@@ -65,19 +65,20 @@ func init() {
 }
 
 type Collector struct {
+	devices map[string]string
 }
 
 var _ cgroups.Collector = &Collector{}
 
 func NewCollector() *Collector {
-	return &Collector{}
+	return &Collector{make(map[string]string)}
 }
 
-func (o *Collector) Controller() string {
+func (c *Collector) Controller() string {
 	return controller
 }
 
-func (o *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
+func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
 	var statSuffix string
 	if slice.Total {
 		statSuffix = "_recursive"
@@ -94,21 +95,46 @@ func (o *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, er
 	}
 
 	for _, stat := range opsStats {
-		device := stat.device
+		device := c.getDeviceName(ctx, stat.device)
 		logging.L(ctx).Debugf("* %s:%s: reads=%d, writes=%d", slice.Service, device, stat.read, stat.write)
-		if false {
-			readsMetric.With(labels(slice.Service, device)).Set(float64(stat.read))
-		}
+		readsMetric.With(labels(slice.Service, device)).Set(float64(stat.read))
+		writesMetric.With(labels(slice.Service, device)).Set(float64(stat.write))
 	}
 
 	for _, stat := range bytesStats {
-		device := stat.device
+		device := c.getDeviceName(ctx, stat.device)
 		logging.L(ctx).Debugf(
 			"* %s:%s: read=%s, written=%s", slice.Service, device,
 			datasize.ByteSize(stat.read), datasize.ByteSize(stat.write))
+		readBytesMetric.With(labels(slice.Service, device)).Set(float64(stat.read))
+		writtenBytesMetric.With(labels(slice.Service, device)).Set(float64(stat.write))
 	}
 
 	return true, nil
+}
+
+func (c *Collector) getDeviceName(ctx context.Context, device string) string {
+	if name, ok := c.devices[device]; ok {
+		return name
+	}
+
+	name, err := readDeviceLink(device)
+	if err != nil {
+		logging.L(ctx).Errorf("Failed to resolve %q device: %s.", device, err)
+		name = device
+	}
+
+	name = path.Base(name)
+	c.devices[device] = name
+	return name
+}
+
+func readDeviceLink(device string) (string, error) {
+	name, err := os.Readlink(path.Join("/dev/char", device))
+	if err != nil && os.IsNotExist(err) {
+		name, err = os.Readlink(path.Join("/dev/block", device))
+	}
+	return name, err
 }
 
 func labels(service string, device string) prometheus.Labels {

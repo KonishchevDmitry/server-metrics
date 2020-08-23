@@ -49,11 +49,11 @@ func NewCollector() *Collector {
 	return &Collector{}
 }
 
-func (o *Collector) Controller() string {
+func (c *Collector) Controller() string {
 	return controller
 }
 
-func (o *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
+func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
 	statName := "memory.stat"
 	stat, exists, err := cgroups.ReadStat(path.Join(slice.Path, statName))
 	if !exists || err != nil {
