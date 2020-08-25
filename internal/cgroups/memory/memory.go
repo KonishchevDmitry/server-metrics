@@ -55,7 +55,7 @@ func (c *Collector) Controller() string {
 
 func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
 	statName := "memory.stat"
-	stat, exists, err := cgroups.ReadStat(path.Join(slice.Path, statName))
+	stat, exists, err := readStat(path.Join(slice.Path, statName))
 	if !exists || err != nil {
 		return exists, err
 	}
