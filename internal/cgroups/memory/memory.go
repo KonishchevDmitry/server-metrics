@@ -5,7 +5,6 @@ import (
 
 	"github.com/c2h5oh/datasize"
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
@@ -53,32 +52,34 @@ func (c *Collector) Controller() string {
 }
 
 func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
-	stat, exists, err := readStat(slice)
+	stat, exists, err := cgroups.ReadStat(slice, "memory.stat")
 	if !exists || err != nil {
 		return exists, err
 	}
 
-	var getErr error
-	get := func(name string) int64 {
-		if slice.Total {
-			name = "total_" + name
-		}
-
-		value, ok := stat[name]
-		if !ok {
-			getErr = xerrors.Errorf("%q entry of memory stats is missing", name)
-		}
-
-		return value
+	var prefix string
+	if slice.Total {
+		prefix = "total_"
 	}
 
-	cache := get("cache")
-	rss := get("rss") + get("rss_huge")
-	if getErr != nil {
-		return false, getErr
+	cache, err := stat.Get(prefix + "cache")
+	if err != nil {
+		return false, err
 	}
 
+	rssOrdinary, err := stat.Get(prefix + "rss")
+	if err != nil {
+		return false, err
+	}
+
+	rssHuge, err := stat.Get(prefix + "rss_huge")
+	if err != nil {
+		return false, err
+	}
+
+	rss := rssOrdinary + rssHuge
 	logging.L(ctx).Debugf("* %s: rss=%s, cache=%s", slice.Service, datasize.ByteSize(rss), datasize.ByteSize(cache))
+
 	rssMetric.With(metrics.Labels(slice.Service)).Set(float64(rss))
 	cacheMetric.With(metrics.Labels(slice.Service)).Set(float64(cache))
 

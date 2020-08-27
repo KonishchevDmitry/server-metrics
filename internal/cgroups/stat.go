@@ -1,4 +1,4 @@
-package memory
+package cgroups
 
 import (
 	"io"
@@ -6,26 +6,37 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
-
 	"golang.org/x/xerrors"
 )
 
-func readStat(slice *cgroups.Slice) (stat map[string]int64, exists bool, err error) {
-	statPath := path.Join(slice.Path, "memory.stat")
+type Stat struct {
+	name string
+	stat map[string]int64
+}
 
-	exists, err = cgroups.ReadFile(statPath, func(file io.Reader) (exists bool, err error) {
-		stat, exists, err = parseStat(file)
+func (s *Stat) Get(name string) (int64, error) {
+	value, ok := s.stat[name]
+	if !ok {
+		return 0, xerrors.Errorf("%q entry of %s is missing", name, s.name)
+	}
+	return value, nil
+}
+
+func ReadStat(slice *Slice, name string) (Stat, bool, error) {
+	stat := Stat{name: name}
+
+	exists, err := ReadFile(path.Join(slice.Path, name), func(file io.Reader) (exists bool, err error) {
+		stat.stat, exists, err = parseStat(file)
 		return
 	})
 
-	return
+	return stat, exists, err
 }
 
 func parseStat(reader io.Reader) (map[string]int64, bool, error) {
 	stat := make(map[string]int64)
 
-	exists, err := cgroups.ParseFile(reader, func(line string) error {
+	exists, err := ParseFile(reader, func(line string) error {
 		tokens := strings.Split(line, " ")
 		if len(tokens) != 2 {
 			return xerrors.Errorf("Got an unexpected stat line: %q", line)

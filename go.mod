@@ -10,6 +10,8 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.6.1
+	github.com/tklauser/go-sysconf v0.0.0-20200824103752-188b5e10b55f
+	github.com/tklauser/numcpus v0.0.0-20200824103859-86a8ac049c67 // indirect
 	go.uber.org/zap v1.15.0
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208

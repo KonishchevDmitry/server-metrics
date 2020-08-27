@@ -4,13 +4,13 @@ import (
 	"context"
 	"sync"
 
-	"golang.org/x/xerrors"
-
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+	"github.com/tklauser/go-sysconf"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
+	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
 
@@ -71,9 +71,17 @@ func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, er
 		logging.L(ctx).Warnf("Calculating total CPU usage for %q which has child groups.", slice.Name)
 	}
 
-	user := secondsUsage(usage.user)
-	system := secondsUsage(usage.system)
+	hz, err := sysconf.Sysconf(sysconf.SC_CLK_TCK)
+	if err != nil {
+		return true, xerrors.Errorf("Unable to determine SC_CLK_TCK value")
+	}
+
+	user := float64(usage.user) / float64(hz)
+	system := float64(usage.system) / float64(hz)
 	logging.L(ctx).Debugf("* %s: user=%.0fs, system=%.0fs", slice.Service, user, system)
+
+	userMetric.With(metrics.Labels(slice.Service)).Set(user)
+	systemMetric.With(metrics.Labels(slice.Service)).Set(system)
 
 	return true, nil
 }
@@ -91,8 +99,8 @@ func collectRoot(slice *cgroups.Slice, usage stat) (stat, error) {
 		}
 
 		for _, usages := range []struct {
-			total *uint64
-			child *uint64
+			total *int64
+			child *int64
 		}{
 			{&usage.user, &childUsage.user},
 			{&usage.system, &childUsage.system},
@@ -109,8 +117,8 @@ func collectRoot(slice *cgroups.Slice, usage stat) (stat, error) {
 	defer lastRootUsageLock.Unlock()
 
 	for _, usages := range []struct {
-		last    *uint64
-		current *uint64
+		last    *int64
+		current *int64
 	}{
 		{&lastRootUsage.user, &usage.user},
 		{&lastRootUsage.system, &usage.system},
@@ -125,6 +133,23 @@ func collectRoot(slice *cgroups.Slice, usage stat) (stat, error) {
 	return usage, nil
 }
 
-func secondsUsage(usage uint64) float64 {
-	return float64(usage) * 1_000_000_000
+type stat struct {
+	user   int64
+	system int64
+}
+
+func readStat(slice *cgroups.Slice) (stat, bool, error) {
+	var usage stat
+
+	stats, exists, err := cgroups.ReadStat(slice, "cpuacct.stat")
+	if !exists || err != nil {
+		return usage, exists, err
+	}
+
+	usage.user, err = stats.Get("user")
+	if err == nil {
+		usage.system, err = stats.Get("system")
+	}
+
+	return usage, true, err
 }
