@@ -7,5 +7,6 @@ docker build -t konishchev/server-metrics .
 docker run --rm --pid host --read-only --publish 9102:9101 \
     --mount type=bind,src=/dev,dst=/dev,readonly \
     --mount type=bind,src=/sys/fs/cgroup/blkio,dst=/sys/fs/cgroup/blkio,readonly \
+    --mount type=bind,src=/sys/fs/cgroup/cpuacct,dst=/sys/fs/cgroup/cpuacct,readonly \
     --mount type=bind,src=/sys/fs/cgroup/memory,dst=/sys/fs/cgroup/memory,readonly \
     konishchev/server-metrics "$@"

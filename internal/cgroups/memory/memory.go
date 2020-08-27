@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"path"
 
 	"github.com/c2h5oh/datasize"
 	"github.com/prometheus/client_golang/prometheus"
@@ -54,8 +53,7 @@ func (c *Collector) Controller() string {
 }
 
 func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
-	statName := "memory.stat"
-	stat, exists, err := readStat(path.Join(slice.Path, statName))
+	stat, exists, err := readStat(slice)
 	if !exists || err != nil {
 		return exists, err
 	}
@@ -68,7 +66,7 @@ func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, er
 
 		value, ok := stat[name]
 		if !ok {
-			getErr = xerrors.Errorf("%q entry of %q is missing", name, statName)
+			getErr = xerrors.Errorf("%q entry of memory stats is missing", name)
 		}
 
 		return value

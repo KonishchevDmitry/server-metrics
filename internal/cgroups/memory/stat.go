@@ -2,6 +2,7 @@ package memory
 
 import (
 	"io"
+	"path"
 	"strconv"
 	"strings"
 
@@ -10,11 +11,14 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func readStat(path string) (stat map[string]int64, exists bool, err error) {
-	exists, err = cgroups.ReadFile(path, func(file io.Reader) (exists bool, err error) {
+func readStat(slice *cgroups.Slice) (stat map[string]int64, exists bool, err error) {
+	statPath := path.Join(slice.Path, "memory.stat")
+
+	exists, err = cgroups.ReadFile(statPath, func(file io.Reader) (exists bool, err error) {
 		stat, exists, err = parseStat(file)
 		return
 	})
+
 	return
 }
 

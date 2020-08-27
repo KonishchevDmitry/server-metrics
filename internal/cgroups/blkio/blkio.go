@@ -79,17 +79,12 @@ func (c *Collector) Controller() string {
 }
 
 func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
-	var statSuffix string
-	if slice.Total {
-		statSuffix = "_recursive"
-	}
-
-	opsStats, exists, err := readStat(path.Join(slice.Path, "blkio.throttle.io_serviced"+statSuffix))
+	opsStats, exists, err := readStat(slice, false, slice.Total)
 	if !exists || err != nil {
 		return exists, err
 	}
 
-	bytesStats, exists, err := readStat(path.Join(slice.Path, "blkio.throttle.io_service_bytes"+statSuffix))
+	bytesStats, exists, err := readStat(slice, true, slice.Total)
 	if !exists || err != nil {
 		return exists, err
 	}

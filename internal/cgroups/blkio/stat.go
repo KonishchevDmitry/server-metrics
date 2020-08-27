@@ -1,7 +1,9 @@
 package blkio
 
 import (
+	"fmt"
 	"io"
+	"path"
 	"strconv"
 	"strings"
 
@@ -16,11 +18,24 @@ type stat struct {
 	write  int64
 }
 
-func readStat(path string) (stats []stat, exists bool, err error) {
-	exists, err = cgroups.ReadFile(path, func(file io.Reader) (exists bool, err error) {
+func readStat(slice *cgroups.Slice, bytes bool, total bool) (stats []stat, exists bool, err error) {
+	typeSuffix := "d"
+	if bytes {
+		typeSuffix = "_bytes"
+	}
+
+	var totalSuffix string
+	if total {
+		totalSuffix = "_recursive"
+	}
+
+	statPath := path.Join(slice.Path, fmt.Sprintf("blkio.throttle.io_service%s%s", typeSuffix, totalSuffix))
+
+	exists, err = cgroups.ReadFile(statPath, func(file io.Reader) (exists bool, err error) {
 		stats, exists, err = parseStat(file)
 		return
 	})
+
 	return
 }
 

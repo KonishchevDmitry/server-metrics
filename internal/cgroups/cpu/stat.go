@@ -1,7 +1,8 @@
-package memory
+package cpu
 
 import (
 	"io"
+	"path"
 	"strconv"
 	"strings"
 
@@ -15,11 +16,14 @@ type stat struct {
 	system uint64
 }
 
-func readStat(path string) (stat stat, exists bool, err error) {
-	exists, err = cgroups.ReadFile(path, func(file io.Reader) (exists bool, err error) {
+func readStat(slice *cgroups.Slice) (stat stat, exists bool, err error) {
+	statPath := path.Join(slice.Path, "cpuacct.usage_all")
+
+	exists, err = cgroups.ReadFile(statPath, func(file io.Reader) (exists bool, err error) {
 		stat, exists, err = parseStat(file)
 		return
 	})
+
 	return
 }
 

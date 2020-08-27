@@ -5,12 +5,12 @@ import (
 	"path"
 	"sync"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/blkio"
-
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/blkio"
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cpu"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/memory"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
@@ -24,6 +24,7 @@ func Collect(ctx context.Context, serial bool) {
 
 	for _, collector := range []cgroups.Collector{
 		blkio.NewCollector(),
+		cpu.NewCollector(),
 		memory.NewCollector(),
 	} {
 		observer := newObserver(collector)
