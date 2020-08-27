@@ -2,7 +2,8 @@ package metrics
 
 import "github.com/prometheus/client_golang/prometheus"
 
-const Namespace = "server_services"
+const Namespace = "server"
+const ServicesNamespace = Namespace + "_services"
 const ServiceLabel = "service"
 
 func Labels(service string) prometheus.Labels {

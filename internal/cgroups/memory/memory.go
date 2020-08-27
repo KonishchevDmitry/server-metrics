@@ -15,7 +15,7 @@ const controller = "memory"
 
 var rssMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Namespace: metrics.Namespace,
+		Namespace: metrics.ServicesNamespace,
 		Subsystem: controller,
 		Name:      "rss",
 		Help:      "Anonymous and swap cache memory usage.",
@@ -25,7 +25,7 @@ var rssMetric = prometheus.NewGaugeVec(
 
 var cacheMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Namespace: metrics.Namespace,
+		Namespace: metrics.ServicesNamespace,
 		Subsystem: controller,
 		Name:      "cache",
 		Help:      "Page cache memory usage.",

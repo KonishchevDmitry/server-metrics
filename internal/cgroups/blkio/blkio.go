@@ -18,7 +18,7 @@ const deviceLabel = "device"
 
 var readsMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Namespace: metrics.Namespace,
+		Namespace: metrics.ServicesNamespace,
 		Subsystem: controller,
 		Name:      "reads",
 		Help:      "Number of read operations issued to the disk by the service.",
@@ -28,7 +28,7 @@ var readsMetric = prometheus.NewGaugeVec(
 
 var writesMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Namespace: metrics.Namespace,
+		Namespace: metrics.ServicesNamespace,
 		Subsystem: controller,
 		Name:      "writes",
 		Help:      "Number of write operations issued to the disk by the service.",
@@ -38,7 +38,7 @@ var writesMetric = prometheus.NewGaugeVec(
 
 var readBytesMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Namespace: metrics.Namespace,
+		Namespace: metrics.ServicesNamespace,
 		Subsystem: controller,
 		Name:      "read_bytes",
 		Help:      "Number of bytes read from the disk by the service.",
@@ -48,7 +48,7 @@ var readBytesMetric = prometheus.NewGaugeVec(
 
 var writtenBytesMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Namespace: metrics.Namespace,
+		Namespace: metrics.ServicesNamespace,
 		Subsystem: controller,
 		Name:      "written_bytes",
 		Help:      "Number of bytes written to the disk by the service.",

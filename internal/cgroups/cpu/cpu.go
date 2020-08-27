@@ -18,7 +18,7 @@ const subsystem = "cpu"
 
 var userMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Namespace: metrics.Namespace,
+		Namespace: metrics.ServicesNamespace,
 		Subsystem: subsystem,
 		Name:      "user",
 		Help:      "CPU time consumed in user mode.",
@@ -28,7 +28,7 @@ var userMetric = prometheus.NewGaugeVec(
 
 var systemMetric = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Namespace: metrics.Namespace,
+		Namespace: metrics.ServicesNamespace,
 		Subsystem: subsystem,
 		Name:      "system",
 		Help:      "CPU time consumed in system (kernel) mode.",
