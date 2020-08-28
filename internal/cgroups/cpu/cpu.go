@@ -63,7 +63,7 @@ func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, er
 	if slice.Name == "/" {
 		var err error
 
-		usage, err = collectRoot(slice, usage)
+		usage, err = collectRoot(ctx, slice, usage)
 		if err != nil {
 			return false, xerrors.Errorf("Failed to collect root cgroup CPU usage: %w", err)
 		}
@@ -78,7 +78,7 @@ func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, er
 
 	user := float64(usage.user) / float64(hz)
 	system := float64(usage.system) / float64(hz)
-	logging.L(ctx).Debugf("* %s: user=%.0fs, system=%.0fs", slice.Service, user, system)
+	logging.L(ctx).Debugf("* %s: user=%.1fs, system=%.1fs", slice.Service, user, system)
 
 	userMetric.With(metrics.Labels(slice.Service)).Set(user)
 	systemMetric.With(metrics.Labels(slice.Service)).Set(system)
@@ -89,9 +89,9 @@ func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, er
 var lastRootUsage stat
 var lastRootUsageLock sync.Mutex
 
-func collectRoot(slice *cgroups.Slice, usage stat) (stat, error) {
+func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, error) {
 	for _, child := range slice.Children {
-		childUsage, exists, err := readStat(slice)
+		childUsage, exists, err := readStat(child)
 		if err != nil {
 			return usage, err
 		} else if !exists {
@@ -117,14 +117,19 @@ func collectRoot(slice *cgroups.Slice, usage stat) (stat, error) {
 	defer lastRootUsageLock.Unlock()
 
 	for _, usages := range []struct {
+		name    string
 		last    *int64
 		current *int64
 	}{
-		{&lastRootUsage.user, &usage.user},
-		{&lastRootUsage.system, &usage.system},
+		{"user", &lastRootUsage.user, &usage.user},
+		{"system", &lastRootUsage.system, &usage.system},
 	} {
 		if *usages.current < *usages.last {
-			return usage, xerrors.Errorf("Got CPU usage less then previous")
+			logging.L(ctx).Warnf(
+				"Calculated %s CPU usage for root cgroup is less then previous: %d vs %d",
+				usages.name, *usages.current, *usages.last)
+
+			*usages.current = *usages.last
 		}
 	}
 
