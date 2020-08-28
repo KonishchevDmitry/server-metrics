@@ -43,6 +43,8 @@ func Configure(develMode bool) (*zap.SugaredLogger, error) {
 	}
 
 	loggerConfig.DisableCaller = true
+	loggerConfig.DisableStacktrace = true
+
 	loggerConfig.Encoding = encoderName
 	loggerConfig.EncoderConfig = encoderConfig
 
