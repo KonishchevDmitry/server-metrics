@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 
-export DOCKER_BUILDKIT=1
-docker build --pull --tag konishchev/server-metrics:stable .
+set -eu
 
-docker stop server-metrics > /dev/null ||:
-docker rm server-metrics > /dev/null ||:
+name=server-metrics
+full_name=konishchev/$name
+
+DOCKER_BUILDKIT=1 docker build --pull --tag "$full_name:stable" .
+
+docker stop "$name" > /dev/null ||:
+docker rm "$name" > /dev/null ||:
 docker run --pid host --read-only --detach --publish 9101:9101 --restart unless-stopped \
     --mount type=bind,src=/dev,dst=/dev,readonly \
     --mount type=bind,src=/sys/fs/cgroup/blkio,dst=/sys/fs/cgroup/blkio,readonly \
     --mount type=bind,src=/sys/fs/cgroup/cpuacct,dst=/sys/fs/cgroup/cpuacct,readonly \
     --mount type=bind,src=/sys/fs/cgroup/memory,dst=/sys/fs/cgroup/memory,readonly \
-    --name server-metrics konishchev/server-metrics:stable > /dev/null
+    --name "$name" --log-opt "tag=$name" "$full_name:stable" > /dev/null
