@@ -61,11 +61,14 @@ func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, er
 	}
 
 	if slice.Name == "/" {
+		var ok bool
 		var err error
 
-		usage, err = collectRoot(ctx, slice, usage)
+		usage, ok, err = collectRoot(ctx, slice, usage)
 		if err != nil {
 			return false, xerrors.Errorf("Failed to collect root cgroup CPU usage: %w", err)
+		} else if !ok {
+			return true, nil
 		}
 	} else if !slice.Total && len(slice.Children) != 0 {
 		logging.L(ctx).Warnf("Calculating total CPU usage for %q which has child groups.", slice.Name)
@@ -87,15 +90,16 @@ func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, er
 }
 
 var lastRootUsage stat
+var rootUsageCounter int64
 var lastRootUsageLock sync.Mutex
 
-func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, error) {
+func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, bool, error) {
 	for _, child := range slice.Children {
 		childUsage, exists, err := readStat(child)
 		if err != nil {
-			return usage, err
+			return usage, false, err
 		} else if !exists {
-			return usage, xerrors.Errorf("%q has been deleted during metrics collection", child.Path)
+			return usage, false, xerrors.Errorf("%q has been deleted during metrics collection", child.Path)
 		}
 
 		for _, usages := range []struct {
@@ -107,7 +111,7 @@ func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, e
 		} {
 			total, child := usages.total, usages.child
 			if *total < *child {
-				return usage, xerrors.Errorf("Got a negative CPU usage")
+				return usage, false, xerrors.Errorf("Got a negative CPU usage")
 			}
 			*total -= *child
 		}
@@ -117,25 +121,37 @@ func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, e
 	defer lastRootUsageLock.Unlock()
 
 	for _, usages := range []struct {
-		name    string
-		last    *int64
-		current *int64
+		name         string
+		last         *int64
+		current      *int64
+		allowedError int64
 	}{
-		{"user", &lastRootUsage.user, &usage.user},
-		{"system", &lastRootUsage.system, &usage.system},
+		{"user", &lastRootUsage.user, &usage.user, 1},
+		{"system", &lastRootUsage.system, &usage.system, 1},
 	} {
-		if *usages.current < *usages.last {
-			logging.L(ctx).Warnf(
-				"Calculated %s CPU usage for root cgroup is less then previous: %d vs %d",
-				usages.name, *usages.current, *usages.last)
+		last := *usages.last
+		current := *usages.current
+
+		if diff := current - last; diff < 0 {
+			calculationError := -diff
+
+			if calculationError > usages.allowedError {
+				logging.L(ctx).Warnf(
+					"Calculated %s CPU usage for root cgroup is less then previous: %d vs %d (%d).",
+					usages.name, current, last, calculationError)
+			}
 
 			*usages.current = *usages.last
 		}
 	}
 
 	lastRootUsage = usage
+	rootUsageCounter++
 
-	return usage, nil
+	// Don't send first calculations to reduce chances to report value which is less than previous on daemon restart
+	ok := rootUsageCounter >= 3
+
+	return usage, ok, nil
 }
 
 type stat struct {
