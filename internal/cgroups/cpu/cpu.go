@@ -2,6 +2,7 @@ package cpu
 
 import (
 	"context"
+	"runtime"
 	"sync"
 
 	"github.com/tklauser/go-sysconf"
@@ -124,9 +125,9 @@ func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, b
 		name         string
 		last         *int64
 		current      *int64
-		allowedError int64
+		allowedError int
 	}{
-		{"user", &lastRootUsage.user, &usage.user, 1},
+		{"user", &lastRootUsage.user, &usage.user, runtime.NumCPU()},
 		{"system", &lastRootUsage.system, &usage.system, 1},
 	} {
 		last := *usages.last
@@ -135,7 +136,7 @@ func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, b
 		if diff := current - last; diff < 0 {
 			calculationError := -diff
 
-			if calculationError > usages.allowedError {
+			if calculationError > int64(usages.allowedError) {
 				logging.L(ctx).Warnf(
 					"Calculated %s CPU usage for root cgroup is less then previous: %d vs %d (%d).",
 					usages.name, current, last, calculationError)
