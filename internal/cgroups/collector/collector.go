@@ -3,9 +3,7 @@ package collector
 import (
 	"context"
 	"path"
-	"sync"
 
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
@@ -15,28 +13,14 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
-func Collect(ctx context.Context, serial bool) {
-	var lock sync.Mutex
-	var group errgroup.Group
-	defer func() {
-		_ = group.Wait()
-	}()
-
+func Collect(ctx context.Context) {
 	for _, collector := range []cgroups.Collector{
 		blkio.NewCollector(),
 		cpu.NewCollector(),
 		memory.NewCollector(),
 	} {
-		observer := newObserver(collector)
-		group.Go(func() error {
-			if serial {
-				lock.Lock()
-				defer lock.Unlock()
-				logging.L(ctx).Debugf("%s controller:", observer.collector.Controller())
-			}
-			observer.observe(ctx)
-			return nil
-		})
+		logging.L(ctx).Debugf("%s controller:", collector.Controller())
+		newObserver(collector).observe(ctx)
 	}
 }
 
