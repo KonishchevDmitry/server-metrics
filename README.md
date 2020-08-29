@@ -1,6 +1,6 @@
 # Prometheus metrics for my home server
 
-Exposes the following metrics for each systemd unit:
+Exposes the following metrics for each non-empty cgroups slice (systemd unit):
 
 ```
 # HELP server_metrics_errors Metrics collection errors.
