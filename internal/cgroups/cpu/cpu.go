@@ -128,7 +128,7 @@ func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, b
 		allowedError int
 	}{
 		{"user", &lastRootUsage.user, &usage.user, runtime.NumCPU()},
-		{"system", &lastRootUsage.system, &usage.system, 1},
+		{"system", &lastRootUsage.system, &usage.system, runtime.NumCPU()},
 	} {
 		last := *usages.last
 		current := *usages.current
