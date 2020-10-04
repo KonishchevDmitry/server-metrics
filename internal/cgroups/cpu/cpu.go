@@ -5,9 +5,8 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/tklauser/go-sysconf"
-
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/tklauser/go-sysconf"
 	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
@@ -118,17 +117,18 @@ func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, b
 		}
 	}
 
+	allowedCalculationError := runtime.NumCPU() * 2
+
 	lastRootUsageLock.Lock()
 	defer lastRootUsageLock.Unlock()
 
 	for _, usages := range []struct {
-		name         string
-		last         *int64
-		current      *int64
-		allowedError int
+		name    string
+		last    *int64
+		current *int64
 	}{
-		{"user", &lastRootUsage.user, &usage.user, runtime.NumCPU()},
-		{"system", &lastRootUsage.system, &usage.system, runtime.NumCPU()},
+		{"user", &lastRootUsage.user, &usage.user},
+		{"system", &lastRootUsage.system, &usage.system},
 	} {
 		last := *usages.last
 		current := *usages.current
@@ -136,7 +136,7 @@ func collectRoot(ctx context.Context, slice *cgroups.Slice, usage stat) (stat, b
 		if diff := current - last; diff < 0 {
 			calculationError := -diff
 
-			if calculationError > int64(usages.allowedError) {
+			if calculationError > int64(allowedCalculationError) {
 				logging.L(ctx).Warnf(
 					"Calculated %s CPU usage for root cgroup is less then previous: %d vs %d (%d).",
 					usages.name, current, last, calculationError)
