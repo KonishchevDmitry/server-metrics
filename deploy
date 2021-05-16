@@ -9,7 +9,7 @@ DOCKER_BUILDKIT=1 docker build --pull --tag "$full_name:stable" .
 
 docker stop "$name" > /dev/null ||:
 docker rm "$name" > /dev/null ||:
-docker run --pid host --read-only --detach --publish 9101:9101 --restart unless-stopped \
+docker run --pid host --read-only --detach --publish 127.0.0.1:9101:9101 --restart unless-stopped \
     --mount type=bind,src=/dev,dst=/dev,readonly \
     --mount type=bind,src=/sys/fs/cgroup/blkio,dst=/sys/fs/cgroup/blkio,readonly \
     --mount type=bind,src=/sys/fs/cgroup/cpuacct,dst=/sys/fs/cgroup/cpuacct,readonly \
