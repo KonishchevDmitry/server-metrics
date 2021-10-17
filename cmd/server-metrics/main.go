@@ -51,17 +51,16 @@ func execute(cmd *cobra.Command) error {
 		_ = logger.Sync() // Always fails to sync stderr
 	}()
 
+	collector := collector.NewCollector()
+
 	if develMode {
 		logger.Info("Running in test mode.")
-		collect(logging.WithLogger(context.Background(), logger))
+		ctx := logging.WithLogger(context.Background(), logger)
+		collector.Collect(ctx)
 		return nil
 	}
 
-	return server.Start(logger, collect)
-}
-
-func collect(ctx context.Context) {
-	collector.Collect(ctx)
+	return server.Start(logger, collector.Collect)
 }
 
 func main() {
