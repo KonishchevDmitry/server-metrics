@@ -2,100 +2,99 @@ package collector
 
 import (
 	"context"
-	"path"
 
 	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
-	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/blkio"
-	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cpu"
-	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/memory"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
 func Collect(ctx context.Context) {
-	for _, collector := range []cgroups.Collector{
-		blkio.NewCollector(),
-		cpu.NewCollector(),
-		memory.NewCollector(),
-	} {
-		logging.L(ctx).Debugf("%s controller:", collector.Controller())
-		newObserver(collector).observe(ctx)
+	// FIXME(konishchev): Enable
+	//blkio.NewCollector(),
+	//cpu.NewCollector(),
+	//memory.NewCollector(),
+
+	root := cgroups.NewGroup("/sys/fs/cgroup", "/")
+
+	observer := observer{
+		services:   make(map[string]string),
+		collectors: []cgroups.Collector{},
+	}
+
+	exists, err := observer.observe(ctx, root)
+	if err == nil && !exists {
+		err = xerrors.Errorf("%q is not mounted", root.Path())
+	}
+	if err != nil {
+		logging.L(ctx).Errorf("Failed to observe cgroups hierarchy: %s.", err)
 	}
 }
 
 type observer struct {
-	rootPath  string
-	services  map[string]string
-	collector cgroups.Collector
+	services   map[string]string
+	collectors []cgroups.Collector
 }
 
-func newObserver(collector cgroups.Collector) *observer {
-	return &observer{
-		rootPath:  path.Join("/sys/fs/cgroup", collector.Controller()),
-		services:  make(map[string]string),
-		collector: collector,
-	}
-}
+func (o *observer) observe(ctx context.Context, group *cgroups.Group) (bool, error) {
+	service, totalCollection := cgroups.ClassifySlice(group.Name)
+	needsCollection := totalCollection
 
-func (o *observer) observe(ctx context.Context) {
-	_, exists, err := o.observeSlice(ctx, "/")
-	if err == nil && !exists {
-		err = xerrors.Errorf("%q is not mounted", o.rootPath)
-	}
-	if err != nil {
-		logging.L(ctx).Errorf("Failed to observe %q cgroups controller: %s.", o.collector.Controller(), err)
-	}
-}
+	if !totalCollection {
+		var observeChildren bool
 
-func (o *observer) observeSlice(ctx context.Context, name string) (*cgroups.Slice, bool, error) {
-	slice := cgroups.NewSlice(o.rootPath, name)
+		if group.IsRoot() {
+			needsCollection = true
+			observeChildren = true
+		} else {
+			hasProcesses, exists, err := group.HasProcesses()
+			if err != nil {
+				return false, err
+			} else if !exists {
+				return false, nil
+			}
 
-	if !slice.Total {
-		children, exists, err := cgroups.ListSlice(slice.Path)
-		if err != nil {
-			return nil, false, err
-		} else if !exists {
-			logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.Path)
-			return nil, false, nil
+			needsCollection = hasProcesses
+			observeChildren = !hasProcesses
 		}
 
-		for _, childName := range children {
-			child, exists, err := o.observeSlice(ctx, path.Join(name, childName))
+		if observeChildren {
+			children, exists, err := group.Children()
 			if err != nil {
-				return nil, false, err
-			} else if exists {
-				slice.Children = append(slice.Children, child)
+				return false, err
+			} else if !exists {
+				return false, nil
+			}
+
+			for _, name := range children {
+				child := group.Child(name)
+
+				if exists, err := o.observe(ctx, child); err != nil {
+					return false, err
+				} else if !exists {
+					logging.L(ctx).Debugf("%q has been deleted during discovering.", child.Path())
+				}
 			}
 		}
 	}
 
-	if collect, err := o.needsCollection(ctx, slice); err != nil {
-		return nil, false, err
-	} else if collect {
-		if exists, err := o.collector.Collect(ctx, slice); err != nil {
-			return nil, false, xerrors.Errorf("Failed to observe %q: %w", slice.Path, err)
-		} else if !exists {
-			logging.L(ctx).Debugf("%q has been deleted during discovering.", slice.Path)
-			return nil, false, nil
-		}
+	if otherGroup, ok := o.services[service]; ok {
+		logging.L(ctx).Errorf("Both %q and %q resolve to %q service.", otherGroup, group.Name, service)
+		return true, nil
 	}
+	o.services[group.Service] = group.Name
 
-	return slice, true, nil
-}
+	if needsCollection {
+		logging.L(ctx).Debugf("Collecting %s -> %s:", group.Name, service)
 
-func (o *observer) needsCollection(ctx context.Context, slice *cgroups.Slice) (bool, error) {
-	if otherName, ok := o.services[slice.Service]; ok {
-		logging.L(ctx).Errorf("Both %q and %q resolve to %q service", otherName, slice.Name, slice.Service)
-		return false, nil
-	}
-	o.services[slice.Service] = slice.Name
-
-	if !slice.Total {
-		if hasTasks, err := slice.HasTasks(ctx); err != nil {
-			return false, err
-		} else if !hasTasks {
-			return false, nil
+		for _, collector := range o.collectors {
+			if exists, err := collector.Collect(ctx, service, group); err != nil {
+				logging.L(ctx).Errorf(
+					"Failed to observe %s controller of %q: %s.",
+					collector.Controller(), group.Path(), err)
+			} else if !exists {
+				return false, nil
+			}
 		}
 	}
 
