@@ -3,40 +3,21 @@ package memory
 import (
 	"context"
 
-	"github.com/c2h5oh/datasize"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/pkg/math"
+
+	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
 
-const controller = "memory"
-
-var rssMetric = prometheus.NewGaugeVec(
-	prometheus.GaugeOpts{
-		Namespace: metrics.ServicesNamespace,
-		Subsystem: controller,
-		Name:      "rss",
-		Help:      "Anonymous and swap cache memory usage.",
-	},
-	[]string{metrics.ServiceLabel},
-)
-
-var cacheMetric = prometheus.NewGaugeVec(
-	prometheus.GaugeOpts{
-		Namespace: metrics.ServicesNamespace,
-		Subsystem: controller,
-		Name:      "cache",
-		Help:      "Page cache memory usage.",
-	},
-	[]string{metrics.ServiceLabel},
-)
-
-func init() {
-	prometheus.MustRegister(rssMetric)
-	prometheus.MustRegister(cacheMetric)
-}
+// FIXME(konishchev): Rename?
+// Amount of memory used in anonymous mappings such as brk(), sbrk(), and mmap(MAP_ANONYMOUS)
+// Amount of memory used to cache filesystem data, including tmpfs and shared memory.
+var rssMetric = metrics.ServiceMetric("memory", "rss", "Anonymous and swap cache memory usage.")
+var cacheMetric = metrics.ServiceMetric("memory", "cache", "Page cache memory usage.")
+var kernelMetric = metrics.ServiceMetric("memory", "kernel", "Kernel data structures.")
 
 type Collector struct {
 }
@@ -47,41 +28,100 @@ func NewCollector() *Collector {
 	return &Collector{}
 }
 
-func (c *Collector) Controller() string {
-	return controller
+func (c *Collector) Reset() {
 }
 
-func (c *Collector) Collect(ctx context.Context, slice *cgroups.Slice) (bool, error) {
-	stat, exists, err := cgroups.ReadStat(slice, "memory.stat")
-	if !exists || err != nil {
+func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group) (bool, error) {
+	usage, exists, err := c.collect(group)
+	if err != nil || !exists {
 		return exists, err
 	}
 
-	var prefix string
-	if slice.Total {
-		prefix = "total_"
+	if group.IsRoot() {
+		usage, exists, err = c.collectRoot(group, usage)
+		if err != nil || !exists {
+			return exists, err
+		}
 	}
 
-	cache, err := stat.Get(prefix + "cache")
-	if err != nil {
-		return false, err
-	}
-
-	rssOrdinary, err := stat.Get(prefix + "rss")
-	if err != nil {
-		return false, err
-	}
-
-	rssHuge, err := stat.Get(prefix + "rss_huge")
-	if err != nil {
-		return false, err
-	}
-
-	rss := rssOrdinary + rssHuge
-	logging.L(ctx).Debugf("* %s: rss=%s, cache=%s", slice.Service, datasize.ByteSize(rss), datasize.ByteSize(cache))
-
-	rssMetric.With(metrics.Labels(slice.Service)).Set(float64(rss))
-	cacheMetric.With(metrics.Labels(slice.Service)).Set(float64(cache))
-
+	c.record(ctx, service, usage)
 	return true, nil
+}
+
+func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
+	stat, exists, err := cgroups.ReadStat(group, "memory.stat")
+	if err != nil || !exists {
+		return Usage{}, exists, err
+	}
+
+	var keyErr error
+	get := func(name string) int64 {
+		value, err := stat.Get(name)
+		if err != nil {
+			keyErr = err
+		}
+		return value
+	}
+
+	usage := Usage{
+		rss:    get("anon"),
+		cache:  get("file"),
+		kernel: get("kernel_stack") + get("pagetables") + get("percpu") + get("slab_unreclaimable") + get("sock"),
+	}
+	if keyErr != nil {
+		return Usage{}, true, keyErr
+	}
+
+	return usage, true, nil
+}
+
+func (c *Collector) collectRoot(group *cgroups.Group, usage Usage) (Usage, bool, error) {
+	rootUsages := usage.ToNamedUsage()
+
+	children, exists, err := group.Children()
+	if err != nil || !exists {
+		return usage, exists, err
+	}
+
+	for _, child := range children {
+		childUsage, exists, err := c.collect(child)
+		if err != nil {
+			return usage, false, err
+		} else if !exists {
+			return usage, false, xerrors.Errorf("%q has been deleted during metrics collection", child.Path())
+		}
+
+		for index, childUsage := range childUsage.ToNamedUsage() {
+			rootUsage := rootUsages[index]
+			*rootUsage.Value = math.MaxInt64(0, *rootUsage.Value-*childUsage.Value)
+		}
+	}
+
+	return usage, true, nil
+}
+
+func (c *Collector) record(ctx context.Context, service string, usage Usage) {
+	logging.L(ctx).Debugf("* %s: memory: rss=%d, cache=%d, kernel=%d", service, usage.rss, usage.cache, usage.kernel)
+
+	labels := metrics.Labels(service)
+	rssMetric.With(labels).Set(float64(usage.rss))
+	cacheMetric.With(labels).Set(float64(usage.cache))
+	kernelMetric.With(labels).Set(float64(usage.kernel))
+}
+
+type Usage struct {
+	rss    int64
+	cache  int64
+	kernel int64
+}
+
+var _ cgroups.ToNamedUsage = &Usage{}
+
+func (u *Usage) ToNamedUsage() []cgroups.NamedUsage {
+	return []cgroups.NamedUsage{
+		// FIXME(konishchev): Allowed error
+		cgroups.MakeMonotonicNamedUsage("resident memory usage", &u.rss, 0),
+		cgroups.MakeMonotonicNamedUsage("page cache usage", &u.cache, 0),
+		cgroups.MakeMonotonicNamedUsage("kernel memory usage", &u.kernel, 0),
+	}
 }
