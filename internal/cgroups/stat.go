@@ -2,11 +2,12 @@ package cgroups
 
 import (
 	"io"
-	"path"
 	"strconv"
 	"strings"
 
 	"golang.org/x/xerrors"
+
+	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
 type Stat struct {
@@ -22,21 +23,21 @@ func (s *Stat) Get(name string) (int64, error) {
 	return value, nil
 }
 
-func ReadStat(slice *Slice, name string) (Stat, bool, error) {
+func ReadStat(group *Group, name string) (Stat, bool, error) {
 	stat := Stat{name: name}
 
-	exists, err := ReadFile(path.Join(slice.Path, name), func(file io.Reader) (exists bool, err error) {
-		stat.stat, exists, err = parseStat(file)
+	exists, err := group.ReadProperty(name, func(file io.Reader) (err error) {
+		stat.stat, err = parseStat(file)
 		return
 	})
 
 	return stat, exists, err
 }
 
-func parseStat(reader io.Reader) (map[string]int64, bool, error) {
+func parseStat(reader io.Reader) (map[string]int64, error) {
 	stat := make(map[string]int64)
 
-	exists, err := ParseFile(reader, func(line string) error {
+	if err := util.ParseFile(reader, func(line string) error {
 		tokens := strings.Split(line, " ")
 		if len(tokens) != 2 {
 			return xerrors.Errorf("Got an unexpected stat line: %q", line)
@@ -54,7 +55,9 @@ func parseStat(reader io.Reader) (map[string]int64, bool, error) {
 
 		stat[name] = value
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
 
-	return stat, exists, err
+	return stat, nil
 }

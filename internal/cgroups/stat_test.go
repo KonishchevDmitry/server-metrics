@@ -9,43 +9,49 @@ import (
 )
 
 func TestParseStat(t *testing.T) {
-	stat, exists, err := parseStat(strings.NewReader(heredoc.Doc(`
-		cache 1757184
-		rss 5406720
-		rss_huge 0
-		shmem 0
-		mapped_file 1216512
-		dirty 0
-		writeback 0
-		pgpgin 1782
-		pgpgout 0
-		pgfault 1716
-		pgmajfault 0
-		inactive_anon 0
-		active_anon 3919872
-		inactive_file 3244032
-		active_file 135168
-		unevictable 0
-		hierarchical_memory_limit 9223372036854771712
-		total_cache 1757184
-		total_rss 5406720
-		total_rss_huge 0
-		total_shmem 0
-		total_mapped_file 1216512
-		total_dirty 0
-		total_writeback 0
-		total_pgpgin 1782
-		total_pgpgout 0
-		total_pgfault 1716
-		total_pgmajfault 0
-		total_inactive_anon 0
-		total_active_anon 3919872
-		total_inactive_file 3244032
-		total_active_file 135168
-		total_unevictable 0
+	stat, err := parseStat(strings.NewReader(heredoc.Doc(`
+		anon 780599296
+		file 6221778944
+		kernel_stack 6471680
+		pagetables 11464704
+		percpu 2328576
+		sock 3518464
+		shmem 3112960
+		file_mapped 278974464
+		file_dirty 2195456
+		file_writeback 0
+		swapcached 6365184
+		anon_thp 4194304
+		file_thp 0
+		shmem_thp 0
+		inactive_anon 633528320
+		active_anon 148041728
+		inactive_file 2885767168
+		active_file 3324174336
+		unevictable 19595264
+		slab_reclaimable 326309080
+		slab_unreclaimable 11402288
+		slab 337711368
+		workingset_refault_anon 2195
+		workingset_refault_file 872129
+		workingset_activate_anon 524
+		workingset_activate_file 354134
+		workingset_restore_anon 49
+		workingset_restore_file 139163
+		workingset_nodereclaim 108800
+		pgfault 87121489
+		pgmajfault 28073
+		pgrefill 2180219
+		pgscan 13213710
+		pgsteal 12706506
+		pgactivate 2356269
+		pgdeactivate 2089123
+		pglazyfree 129565
+		pglazyfreed 2571
+		thp_fault_alloc 314
+		thp_collapse_alloc 89
 	`)))
 	require.NoError(t, err)
-	require.True(t, exists)
-	require.Len(t, stat, 33)
-	require.Equal(t, int64(1757184), stat["total_cache"])
+	require.Len(t, stat, 40)
+	require.Equal(t, int64(337711368), stat["slab"])
 }
