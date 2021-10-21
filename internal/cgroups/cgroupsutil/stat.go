@@ -1,4 +1,4 @@
-package cgroups
+package cgroupsutil
 
 import (
 	"io"
@@ -7,6 +7,7 @@ import (
 
 	"golang.org/x/xerrors"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
@@ -23,7 +24,7 @@ func (s *Stat) Get(name string) (int64, error) {
 	return value, nil
 }
 
-func ReadStat(group *Group, name string) (Stat, bool, error) {
+func ReadStat(group *cgroups.Group, name string) (Stat, bool, error) {
 	stat := Stat{name: name}
 
 	exists, err := group.ReadProperty(name, func(file io.Reader) (err error) {
