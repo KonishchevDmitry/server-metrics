@@ -1,10 +1,8 @@
 package cgroups
 
-import (
-	"context"
-)
+import "context"
 
 type Collector interface {
-	Controller() string
-	Collect(ctx context.Context, service string, slice *Group) (bool, error)
+	Reset()
+	Collect(ctx context.Context, service string, group *Group) (bool, error)
 }
