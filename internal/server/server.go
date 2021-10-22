@@ -4,13 +4,11 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
-
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
-
 	"golang.org/x/sync/semaphore"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
 func Start(logger *zap.SugaredLogger, collect func(ctx context.Context)) error {
@@ -24,8 +22,8 @@ func Start(logger *zap.SugaredLogger, collect func(ctx context.Context)) error {
 			return
 		}
 		func() {
-			defer lock.Release(1)
 			collect(ctx)
+			lock.Release(1)
 		}()
 
 		prometheusHandler.ServeHTTP(writer, request)
