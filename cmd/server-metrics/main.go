@@ -7,7 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
+	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
 )
@@ -50,12 +52,19 @@ func execute(cmd *cobra.Command) error {
 	defer func() {
 		_ = logger.Sync() // Always fails to sync stderr
 	}()
+	ctx := logging.WithLogger(context.Background(), logger)
 
-	collector := collector.NewCollector()
+	dockerResolver := docker.NewResolver()
+	defer func() {
+		if err := dockerResolver.Close(); err != nil {
+			logging.L(ctx).Errorf("Failed to close Docker resolver: %s.", err)
+		}
+	}()
+
+	collector := collector.NewCollector(classifier.New(dockerResolver))
 
 	if develMode {
 		logger.Info("Running in test mode.")
-		ctx := logging.WithLogger(context.Background(), logger)
 		collector.Collect(ctx)
 		return nil
 	}
