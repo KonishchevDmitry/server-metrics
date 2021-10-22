@@ -47,7 +47,11 @@ func (c *Collector) Collect(ctx context.Context) {
 }
 
 func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services map[string]string) (bool, error) {
-	service, totalCollection, classified := c.classifier.ClassifySlice(group.Name)
+	service, totalCollection, classified, err := c.classifier.ClassifySlice(ctx, group.Name)
+	if err != nil {
+		logging.L(ctx).Errorf("Failed to classify %q cgroup: %s.", group.Name, err)
+		return true, nil
+	}
 	needsCollection := totalCollection
 
 	if !totalCollection {
