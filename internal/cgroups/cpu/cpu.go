@@ -3,7 +3,6 @@ package cpu
 import (
 	"context"
 
-	"github.com/pkg/math"
 	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
@@ -80,70 +79,21 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 }
 
 func (c *Collector) collectRoot(root Usage, children []*cgroups.Group) error {
-	// We do this manual racy calculations as the best effort: on my server a get the following results:
-	//
-	// /sys/fs/cgroup# grep user_usec cpu.stat | cut -d ' ' -f 2
-	// 46283360000
-	// /sys/fs/cgroup# bc <<< $(grep user_usec */cpu.stat | cut -d ' ' -f 2 | tr '\n' '+' | sed 's/\+$//')
-	// 51792306852
-	//
-	// As you can see, about 10% of root CPU usage is lost somewhere. So as a workaround we manually calculate diffs and
-	// hope that they will be precise enough.
-
 	current := rootUsage{root: root}
 
-	{
-		total := current.children.ToNamedUsage()
-
-		for _, child := range children {
-			childUsage, exists, err := c.collect(child)
-			if err != nil {
-				return err
-			} else if !exists {
-				return xerrors.Errorf("%q has been deleted during metrics collection", child.Path())
-			}
-
-			for index, usage := range childUsage.ToNamedUsage() {
-				*total[index].Value += *usage.Value
-			}
+	for _, child := range children {
+		childUsage, exists, err := c.collect(child)
+		if err != nil {
+			return err
+		} else if !exists {
+			return xerrors.Errorf("%q has been deleted during metrics collection", child.Path())
 		}
+		cgroups.AddUsage(&current.children, &childUsage)
 	}
 
 	if c.lastRootUsage != nil {
-		diff := current
-
-		{
-			last := c.lastRootUsage.root.ToNamedUsage()
-
-			for index, current := range diff.root.ToNamedUsage() {
-				*current.Value -= *last[index].Value
-				if *current.Value < 0 {
-					return xerrors.Errorf("Got a negative %s", current.Name)
-				}
-			}
-		}
-
-		{
-			last := c.lastRootUsage.children.ToNamedUsage()
-
-			for index, current := range diff.children.ToNamedUsage() {
-				*current.Value -= *last[index].Value
-				if *current.Value < 0 {
-					return xerrors.Errorf("Got a negative children %s", current.Name)
-				}
-			}
-		}
-
-		netRoot := diff.root
-		netRootValues := netRoot.ToNamedUsage()
-
-		for index, children := range diff.children.ToNamedUsage() {
-			root := netRootValues[index]
-			*root.Value = math.MaxInt64(0, *root.Value-*children.Value)
-		}
-
-		for index, netRootTotal := range c.netRootUsage.ToNamedUsage() {
-			*netRootTotal.Value += *netRootValues[index].Value
+		if err := cgroups.CalculateRootGroupUsage(&c.netRootUsage, &current, c.lastRootUsage); err != nil {
+			return err
 		}
 	}
 
@@ -180,4 +130,10 @@ func (u *Usage) ToNamedUsage() []cgroups.NamedUsage {
 type rootUsage struct {
 	root     Usage
 	children Usage
+}
+
+var _ cgroups.ToRootUsage = &rootUsage{}
+
+func (u *rootUsage) ToRootUsage() (cgroups.ToNamedUsage, cgroups.ToNamedUsage) {
+	return &u.root, &u.children
 }
