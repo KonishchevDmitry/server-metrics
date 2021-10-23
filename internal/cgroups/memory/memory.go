@@ -76,7 +76,7 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 }
 
 func (c *Collector) collectRoot(group *cgroups.Group, usage Usage) (Usage, bool, error) {
-	rootUsages := usage.ToNamedUsage()
+	rootUsages := usage.ToUsage()
 
 	children, exists, err := group.Children()
 	if err != nil || !exists {
@@ -91,7 +91,7 @@ func (c *Collector) collectRoot(group *cgroups.Group, usage Usage) (Usage, bool,
 			return usage, false, xerrors.Errorf("%q has been deleted during metrics collection", child.Path())
 		}
 
-		for index, childUsage := range childUsage.ToNamedUsage() {
+		for index, childUsage := range childUsage.ToUsage() {
 			rootUsage := rootUsages[index]
 			*rootUsage.Value = math.MaxInt64(0, *rootUsage.Value-*childUsage.Value)
 		}
@@ -115,12 +115,12 @@ type Usage struct {
 	kernel int64
 }
 
-var _ cgroups.ToNamedUsage = &Usage{}
+var _ cgroups.ToUsage = &Usage{}
 
-func (u *Usage) ToNamedUsage() []cgroups.NamedUsage {
-	return []cgroups.NamedUsage{
-		cgroups.MakeNamedUsage("rss memory usage", &u.rss, 0),
-		cgroups.MakeNamedUsage("page cache usage", &u.cache, 0),
-		cgroups.MakeNamedUsage("kernel memory usage", &u.kernel, 0),
+func (u *Usage) ToUsage() []cgroups.Usage {
+	return []cgroups.Usage{
+		cgroups.MakeUsage("rss memory usage", &u.rss),
+		cgroups.MakeUsage("page cache usage", &u.cache),
+		cgroups.MakeUsage("kernel memory usage", &u.kernel),
 	}
 }

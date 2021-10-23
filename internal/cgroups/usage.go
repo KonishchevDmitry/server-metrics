@@ -4,36 +4,34 @@ import (
 	"golang.org/x/xerrors"
 )
 
-type ToNamedUsage interface {
-	ToNamedUsage() []NamedUsage
+type ToUsage interface {
+	ToUsage() []Usage
 }
 
 type ToRootUsage interface {
-	ToRootUsage() (root ToNamedUsage, children ToNamedUsage)
+	ToRootUsage() (root ToUsage, children ToUsage)
 }
 
-type NamedUsage struct {
-	Name      string
-	Value     *int64
-	Precision int64
+type Usage struct {
+	Name  string
+	Value *int64
 }
 
-func MakeNamedUsage(name string, value *int64, precision int64) NamedUsage {
-	return NamedUsage{
-		Name:      name,
-		Value:     value,
-		Precision: precision,
+func MakeUsage(name string, value *int64) Usage {
+	return Usage{
+		Name:  name,
+		Value: value,
 	}
 }
 
-func AddUsage(total ToNamedUsage, other ToNamedUsage) {
-	totalUsages := total.ToNamedUsage()
-	for index, usage := range other.ToNamedUsage() {
+func AddUsage(total ToUsage, other ToUsage) {
+	totalUsages := total.ToUsage()
+	for index, usage := range other.ToUsage() {
 		*totalUsages[index].Value += *usage.Value
 	}
 }
 
-func CalculateRootGroupUsage(netRootUsage ToNamedUsage, current ToRootUsage, previous ToRootUsage) error {
+func CalculateRootGroupUsage(netRootUsage ToUsage, current ToRootUsage, previous ToRootUsage) error {
 	// We do this manual racy calculations as the best effort: on my server a get the following results:
 	//
 	// /sys/fs/cgroup# grep user_usec cpu.stat | cut -d ' ' -f 2
@@ -57,7 +55,7 @@ func CalculateRootGroupUsage(netRootUsage ToNamedUsage, current ToRootUsage, pre
 		return err
 	}
 
-	for index, netRootUsage := range netRootUsage.ToNamedUsage() {
+	for index, netRootUsage := range netRootUsage.ToUsage() {
 		rootDiff := *rootDiffs[index].Value
 		childrenDiff := *childrenDiffs[index].Value
 		if rootDiff > childrenDiff {
@@ -68,17 +66,17 @@ func CalculateRootGroupUsage(netRootUsage ToNamedUsage, current ToRootUsage, pre
 	return nil
 }
 
-func diffUsage(current ToNamedUsage, previous ToNamedUsage) ([]NamedUsage, error) {
-	currentUsages := current.ToNamedUsage()
-	previousUsages := previous.ToNamedUsage()
-	diffUsages := make([]NamedUsage, 0, len(currentUsages))
+func diffUsage(current ToUsage, previous ToUsage) ([]Usage, error) {
+	currentUsages := current.ToUsage()
+	previousUsages := previous.ToUsage()
+	diffUsages := make([]Usage, 0, len(currentUsages))
 
 	for index, current := range currentUsages {
 		diff := *current.Value - *previousUsages[index].Value
 		if diff < 0 {
 			return nil, xerrors.Errorf("Got a negative %s", current.Name)
 		}
-		diffUsages = append(diffUsages, MakeNamedUsage(current.Name, &diff, current.Precision))
+		diffUsages = append(diffUsages, MakeUsage(current.Name, &diff))
 	}
 
 	return diffUsages, nil

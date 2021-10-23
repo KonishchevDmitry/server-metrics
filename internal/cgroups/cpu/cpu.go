@@ -118,12 +118,12 @@ type Usage struct {
 	system int64
 }
 
-var _ cgroups.ToNamedUsage = &Usage{}
+var _ cgroups.ToUsage = &Usage{}
 
-func (u *Usage) ToNamedUsage() []cgroups.NamedUsage {
-	return []cgroups.NamedUsage{
-		cgroups.MakeNamedUsage("user CPU usage", &u.user, 0),
-		cgroups.MakeNamedUsage("system CPU usage", &u.system, 0),
+func (u *Usage) ToUsage() []cgroups.Usage {
+	return []cgroups.Usage{
+		cgroups.MakeUsage("user CPU usage", &u.user),
+		cgroups.MakeUsage("system CPU usage", &u.system),
 	}
 }
 
@@ -134,6 +134,6 @@ type rootUsage struct {
 
 var _ cgroups.ToRootUsage = &rootUsage{}
 
-func (u *rootUsage) ToRootUsage() (cgroups.ToNamedUsage, cgroups.ToNamedUsage) {
+func (u *rootUsage) ToRootUsage() (cgroups.ToUsage, cgroups.ToUsage) {
 	return &u.root, &u.children
 }
