@@ -12,9 +12,6 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
 
-// FIXME(konishchev): Rename?
-// Amount of memory used in anonymous mappings such as brk(), sbrk(), and mmap(MAP_ANONYMOUS)
-// Amount of memory used to cache filesystem data, including tmpfs and shared memory.
 var rssMetric = metrics.ServiceMetric("memory", "rss", "Anonymous and swap cache memory usage.")
 var cacheMetric = metrics.ServiceMetric("memory", "cache", "Page cache memory usage.")
 var kernelMetric = metrics.ServiceMetric("memory", "kernel", "Kernel data structures.")
