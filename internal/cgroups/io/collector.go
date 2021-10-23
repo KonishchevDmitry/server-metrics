@@ -7,20 +7,22 @@ import (
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
-	"github.com/KonishchevDmitry/server-metrics/internal/constants"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
 type Collector struct {
-	resolver         *deviceResolver
-	lastRootUsage    Usage
-	rootUsageCounter uint64
+	resolver      *deviceResolver
+	lastRootUsage map[string]*rootUsage
+	netRootUsage  Usage
 }
 
 var _ cgroups.Collector = &Collector{}
 
 func NewCollector() *Collector {
-	return &Collector{resolver: newDeviceResolver()}
+	return &Collector{
+		resolver:     newDeviceResolver(),
+		netRootUsage: make(Usage),
+	}
 }
 
 func (c *Collector) Reset() {
@@ -28,23 +30,34 @@ func (c *Collector) Reset() {
 }
 
 func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group) (bool, error) {
+	var (
+		children []*cgroups.Group
+		exists   bool
+		err      error
+	)
+
+	isRoot := group.IsRoot()
+
+	if isRoot {
+		children, exists, err = group.Children()
+		if err != nil || !exists {
+			return exists, err
+		}
+	}
+
 	usage, exists, err := c.collect(group)
 	if err != nil || !exists {
 		return exists, err
 	}
 
-	stable := true
-	if group.IsRoot() {
-		usage, exists, err = c.collectRoot(ctx, group, usage)
-		if err != nil || !exists {
-			return exists, err
+	if isRoot {
+		if err := c.collectRoot(usage, children); err != nil {
+			return true, err
 		}
-
-		// Don't send first calculations to reduce chances to report value which is less than previous on daemon restart
-		stable = c.rootUsageCounter >= 3
+		usage = c.netRootUsage
 	}
 
-	c.record(ctx, service, usage, stable)
+	c.record(ctx, service, usage)
 	return true, nil
 }
 
@@ -83,74 +96,52 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 	return usage, true, nil
 }
 
-func (c *Collector) collectRoot(ctx context.Context, group *cgroups.Group, usage Usage) (Usage, bool, error) {
-	children, exists, err := group.Children()
-	if err != nil || !exists {
-		return nil, exists, err
+func (c *Collector) collectRoot(root Usage, children []*cgroups.Group) error {
+	current := make(map[string]*rootUsage, len(root))
+	for device, usage := range root {
+		current[device] = &rootUsage{root: *usage}
 	}
 
 	for _, child := range children {
 		childUsage, exists, err := c.collect(child)
 		if err != nil {
-			return nil, false, err
+			return err
 		} else if !exists {
-			return nil, false, xerrors.Errorf("%q has been deleted during metrics collection", child.Path())
+			return xerrors.Errorf("%q has been deleted during metrics collection", child.Path())
 		}
 
-		for device, childUsage := range childUsage {
-			rootUsage, ok := usage[device]
+		for device, usage := range childUsage {
+			total, ok := current[device]
 			if !ok {
-				// FIXME(konishchev): Support
-				continue
-				return nil, false, xerrors.Errorf(
-					"Got %q device usage statistics for %q group which is missing on the root group",
-					device, child.Name)
+				total = &rootUsage{}
+				current[device] = total
 			}
-
-			childNamedUsage := childUsage.ToNamedUsage()
-
-			for index, rootUsage := range rootUsage.ToNamedUsage() {
-				childUsage := childNamedUsage[index]
-				if *rootUsage.Value < *childUsage.Value {
-					return Usage{}, false, xerrors.Errorf("Got a negative %s for %s", rootUsage.Name, device)
-				}
-				*rootUsage.Value -= *childUsage.Value
-			}
+			cgroups.AddUsage(&total.children, usage)
 		}
 	}
 
-	for device, current := range usage {
+	for device, current := range current {
 		last, ok := c.lastRootUsage[device]
 		if !ok {
 			continue
 		}
 
-		lastNamed := last.ToNamedUsage()
+		netRootUsage, ok := c.netRootUsage[device]
+		if !ok {
+			netRootUsage = &deviceUsage{}
+			c.netRootUsage[device] = netRootUsage
+		}
 
-		for index, current := range current.ToNamedUsage() {
-			last := lastNamed[index]
-
-			if diff := *current.Value - *last.Value; diff < 0 {
-				calculationError := -diff
-
-				if calculationError > current.Precision {
-					logging.L(ctx).Warnf(
-						"Calculated %s for root cgroup is less then previous: %d vs %d (%d).",
-						current.Name, *current.Value, *last.Value, diff)
-				}
-
-				*current.Value = *last.Value
-			}
+		if err := cgroups.CalculateRootGroupUsage(netRootUsage, current, last); err != nil {
+			return err
 		}
 	}
 
-	c.lastRootUsage = usage
-	c.rootUsageCounter++
-
-	return usage, true, nil
+	c.lastRootUsage = current
+	return nil
 }
 
-func (c *Collector) record(ctx context.Context, service string, usage Usage, stable bool) {
+func (c *Collector) record(ctx context.Context, service string, usage Usage) {
 	for device, stat := range usage {
 		device = c.resolver.getDeviceName(ctx, device)
 
@@ -158,15 +149,13 @@ func (c *Collector) record(ctx context.Context, service string, usage Usage, sta
 			"* %s: %s: reads=%d, writes=%d, read=%d, written=%d",
 			service, device, stat.reads, stat.writes, stat.read, stat.written)
 
-		if stable {
-			labels := newLabels(service, device)
+		labels := newLabels(service, device)
 
-			readsMetric.With(labels).Set(float64(stat.read))
-			writesMetric.With(labels).Set(float64(stat.writes))
+		readsMetric.With(labels).Set(float64(stat.read))
+		writesMetric.With(labels).Set(float64(stat.writes))
 
-			readBytesMetric.With(labels).Set(float64(stat.read))
-			writtenBytesMetric.With(labels).Set(float64(stat.written))
-		}
+		readBytesMetric.With(labels).Set(float64(stat.read))
+		writtenBytesMetric.With(labels).Set(float64(stat.written))
 	}
 }
 
@@ -180,16 +169,25 @@ type deviceUsage struct {
 	written int64
 }
 
-var _ cgroups.ToNamedUsage = &deviceUsage{}
+var _ cgroups.ToUsage = &deviceUsage{}
 
-func (u *deviceUsage) ToNamedUsage() []cgroups.NamedUsage {
-	return []cgroups.NamedUsage{
-		// FIXME(konishchev): Alter errors
+func (u *deviceUsage) ToUsage() []cgroups.Usage {
+	return []cgroups.Usage{
+		cgroups.MakeUsage("read operations", &u.reads),
+		cgroups.MakeUsage("write operations", &u.writes),
 
-		cgroups.MakeNamedUsage("read operations", &u.reads, 200),
-		cgroups.MakeNamedUsage("write operations", &u.writes, 200),
-
-		cgroups.MakeNamedUsage("read bytes", &u.read, 10*constants.MB),
-		cgroups.MakeNamedUsage("written bytes", &u.written, 10*constants.MB),
+		cgroups.MakeUsage("read bytes", &u.read),
+		cgroups.MakeUsage("written bytes", &u.written),
 	}
+}
+
+type rootUsage struct {
+	root     deviceUsage
+	children deviceUsage
+}
+
+var _ cgroups.ToRootUsage = &rootUsage{}
+
+func (u *rootUsage) ToRootUsage() (cgroups.ToUsage, cgroups.ToUsage) {
+	return &u.root, &u.children
 }
