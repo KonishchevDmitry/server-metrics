@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/pkg/math"
-
 	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
@@ -49,7 +49,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 }
 
 func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
-	stat, exists, err := cgroups.ReadStat(group, "memory.stat")
+	stat, exists, err := cgroupsutil.ReadStat(group, "memory.stat")
 	if err != nil || !exists {
 		return Usage{}, exists, err
 	}
@@ -103,7 +103,7 @@ func (c *Collector) collectRoot(group *cgroups.Group, usage Usage) (Usage, bool,
 func (c *Collector) record(ctx context.Context, service string, usage Usage) {
 	logging.L(ctx).Debugf("* %s: memory: rss=%d, cache=%d, kernel=%d", service, usage.rss, usage.cache, usage.kernel)
 
-	labels := metrics.Labels(service)
+	labels := metrics.ServiceLabels(service)
 	rssMetric.With(labels).Set(float64(usage.rss))
 	cacheMetric.With(labels).Set(float64(usage.cache))
 	kernelMetric.With(labels).Set(float64(usage.kernel))
@@ -119,9 +119,8 @@ var _ cgroups.ToNamedUsage = &Usage{}
 
 func (u *Usage) ToNamedUsage() []cgroups.NamedUsage {
 	return []cgroups.NamedUsage{
-		// FIXME(konishchev): Allowed error
-		cgroups.MakeMonotonicNamedUsage("resident memory usage", &u.rss, 0),
-		cgroups.MakeMonotonicNamedUsage("page cache usage", &u.cache, 0),
-		cgroups.MakeMonotonicNamedUsage("kernel memory usage", &u.kernel, 0),
+		cgroups.MakeNamedUsage("rss memory usage", &u.rss, 0),
+		cgroups.MakeNamedUsage("page cache usage", &u.cache, 0),
+		cgroups.MakeNamedUsage("kernel memory usage", &u.kernel, 0),
 	}
 }

@@ -16,4 +16,4 @@ docker run --rm -v "$PWD:/data" --entrypoint /usr/local/bin/goimports \
 docker run --rm -t \
     -v "$PWD:/app" -w /app \
     -v "$PWD/.cache:/cache" -e GOCACHE=/cache/go -e GOMODCACHE=/cache/mod -e GOLANGCI_LINT_CACHE=/cache/lint \
-    golangci/golangci-lint:v1.30.0 golangci-lint run
+    golangci/golangci-lint:v1.42 golangci-lint run

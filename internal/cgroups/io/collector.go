@@ -3,11 +3,11 @@ package io
 import (
 	"context"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/constants"
-
 	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
+	"github.com/KonishchevDmitry/server-metrics/internal/constants"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
@@ -16,6 +16,8 @@ type Collector struct {
 	lastRootUsage    Usage
 	rootUsageCounter uint64
 }
+
+var _ cgroups.Collector = &Collector{}
 
 func NewCollector() *Collector {
 	return &Collector{resolver: newDeviceResolver()}
@@ -47,8 +49,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 }
 
 func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
-	// FIXME(konishchev): Here and everywhere: Check controller enabled
-	stats, exists, err := cgroups.ReadNamedStat(group, "io.stat")
+	stats, exists, err := cgroupsutil.ReadNamedStat(group, "io.stat")
 	if err != nil || !exists {
 		return Usage{}, exists, err
 	}
@@ -56,6 +57,8 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 	usage := make(Usage, len(stats))
 
 	for device, stat := range stats {
+		stat := stat
+
 		var keyErr error
 		get := func(name string) int64 {
 			value, err := stat.Get(name)
@@ -77,7 +80,7 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 		}
 	}
 
-	return usage, true, err
+	return usage, true, nil
 }
 
 func (c *Collector) collectRoot(ctx context.Context, group *cgroups.Group, usage Usage) (Usage, bool, error) {
@@ -109,7 +112,7 @@ func (c *Collector) collectRoot(ctx context.Context, group *cgroups.Group, usage
 			for index, rootUsage := range rootUsage.ToNamedUsage() {
 				childUsage := childNamedUsage[index]
 				if *rootUsage.Value < *childUsage.Value {
-					return Usage{}, false, xerrors.Errorf("Got a negative %s", rootUsage.Name)
+					return Usage{}, false, xerrors.Errorf("Got a negative %s for %s", rootUsage.Name, device)
 				}
 				*rootUsage.Value -= *childUsage.Value
 			}
@@ -130,7 +133,7 @@ func (c *Collector) collectRoot(ctx context.Context, group *cgroups.Group, usage
 			if diff := *current.Value - *last.Value; diff < 0 {
 				calculationError := -diff
 
-				if calculationError > current.AllowedError {
+				if calculationError > current.Precision {
 					logging.L(ctx).Warnf(
 						"Calculated %s for root cgroup is less then previous: %d vs %d (%d).",
 						current.Name, *current.Value, *last.Value, diff)
@@ -183,10 +186,10 @@ func (u *deviceUsage) ToNamedUsage() []cgroups.NamedUsage {
 	return []cgroups.NamedUsage{
 		// FIXME(konishchev): Alter errors
 
-		cgroups.MakeMonotonicNamedUsage("read operations", &u.reads, 200),
-		cgroups.MakeMonotonicNamedUsage("write operations", &u.writes, 200),
+		cgroups.MakeNamedUsage("read operations", &u.reads, 200),
+		cgroups.MakeNamedUsage("write operations", &u.writes, 200),
 
-		cgroups.MakeMonotonicNamedUsage("read bytes", &u.read, 10*constants.MB),
-		cgroups.MakeMonotonicNamedUsage("written bytes", &u.written, 10*constants.MB),
+		cgroups.MakeNamedUsage("read bytes", &u.read, 10*constants.MB),
+		cgroups.MakeNamedUsage("written bytes", &u.written, 10*constants.MB),
 	}
 }

@@ -4,11 +4,20 @@ run:
 linters:
   enable-all: true
   disable:
+    - cyclop
+    - exhaustivestruct
+    - funlen
     - gochecknoglobals
     - gochecknoinits
     - gci
+    - gocognit
     - gofumpt
     - gomnd
+    - ifshort
+    - lll
+    - nestif
     - nlreturn
+    - paralleltest
     - testpackage
+    - wrapcheck
     - wsl

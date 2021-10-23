@@ -113,13 +113,14 @@ func (g *Group) list() ([]fs.FileInfo, bool, error) {
 }
 
 func mapReadError(err error) error {
-	if xerrors.Is(err, syscall.ENOENT) {
-		// The file is missing
+	switch {
+	// The file is missing
+	case xerrors.Is(err, syscall.ENOENT):
 		return nil
-	} else if xerrors.Is(err, syscall.ENODEV) {
-		// The file has been deleted during reading
+	// The file has been deleted during reading
+	case xerrors.Is(err, syscall.ENODEV):
 		return nil
-	} else {
+	default:
 		return err
 	}
 }

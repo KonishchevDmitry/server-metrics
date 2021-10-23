@@ -19,7 +19,7 @@ func newMetric(name string, help string) *prometheus.GaugeVec {
 }
 
 func newLabels(service string, device string) prometheus.Labels {
-	labels := metrics.Labels(service)
+	labels := metrics.ServiceLabels(service)
 	labels[deviceLabel] = device
 	return labels
 }

@@ -55,11 +55,14 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (
 		const dockerPrefix = "docker-"
 		const dockerSuffix = ".scope"
 
-		if strings.HasSuffix(child, serviceSuffix) {
+		switch {
+		case strings.HasSuffix(child, serviceSuffix):
 			return classify(trimChild("", serviceSuffix), false)
-		} else if strings.HasPrefix(child, serviceGroupPrefix) && strings.HasSuffix(child, serviceGroupSuffix) {
+
+		case strings.HasPrefix(child, serviceGroupPrefix) && strings.HasSuffix(child, serviceGroupSuffix):
 			return classify(trimChild(serviceGroupPrefix, serviceGroupSuffix), true)
-		} else if strings.HasPrefix(child, dockerPrefix) && strings.HasSuffix(child, dockerSuffix) {
+
+		case strings.HasPrefix(child, dockerPrefix) && strings.HasSuffix(child, dockerSuffix):
 			containerID := trimChild(dockerPrefix, dockerSuffix)
 
 			container, err := c.docker.Resolve(ctx, containerID)

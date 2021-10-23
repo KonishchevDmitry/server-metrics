@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/pkg/math"
-
 	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
@@ -62,7 +62,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 }
 
 func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
-	stats, exists, err := cgroups.ReadStat(group, "cpu.stat")
+	stats, exists, err := cgroupsutil.ReadStat(group, "cpu.stat")
 	if err != nil || !exists {
 		return Usage{}, exists, err
 	}
@@ -158,7 +158,7 @@ func (c *Collector) record(ctx context.Context, service string, usage Usage) {
 	system := float64(usage.system) / usec
 	logging.L(ctx).Debugf("* %s: cpu: user=%.1fs, system=%.1fs", service, user, system)
 
-	labels := metrics.Labels(service)
+	labels := metrics.ServiceLabels(service)
 	userMetric.With(labels).Set(user)
 	systemMetric.With(labels).Set(system)
 }
@@ -172,9 +172,8 @@ var _ cgroups.ToNamedUsage = &Usage{}
 
 func (u *Usage) ToNamedUsage() []cgroups.NamedUsage {
 	return []cgroups.NamedUsage{
-		// FIXME(konishchev): Allowed error
-		cgroups.MakeMonotonicNamedUsage("user CPU usage", &u.user, 0),
-		cgroups.MakeMonotonicNamedUsage("system CPU usage", &u.system, 0),
+		cgroups.MakeNamedUsage("user CPU usage", &u.user, 0),
+		cgroups.MakeNamedUsage("system CPU usage", &u.system, 0),
 	}
 }
 
