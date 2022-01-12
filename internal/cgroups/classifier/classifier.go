@@ -55,6 +55,8 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (
 		const dockerPrefix = "docker-"
 		const dockerSuffix = ".scope"
 
+		const dockerBuilderPrefix = "system.slice:docker:"
+
 		switch {
 		case strings.HasSuffix(child, serviceSuffix):
 			return classify(trimChild("", serviceSuffix), false)
@@ -76,6 +78,9 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (
 			}
 
 			return classify(service, false)
+
+		case strings.HasPrefix(child, dockerBuilderPrefix) && path.Ext(child[len(dockerBuilderPrefix):]) == "":
+			return classify("docker-builder", false)
 		}
 	}
 
