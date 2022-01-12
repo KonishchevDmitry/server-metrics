@@ -14,10 +14,12 @@ linters:
     - gofumpt
     - gomnd
     - ifshort
+    - ireturn
     - lll
     - nestif
     - nlreturn
     - paralleltest
     - testpackage
+    - varnamelen
     - wrapcheck
     - wsl

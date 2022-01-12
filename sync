@@ -5,15 +5,20 @@ set -eu
 go get -u -t ./...
 go mod tidy
 
+package=github.com/KonishchevDmitry/server-metrics
 src_dirs="$(realpath --no-symlinks --relative-to "$PWD" $(go list -f '{{.Dir}}' ./...))"
 
 docker run --rm -v "$PWD:/data" --entrypoint /usr/local/bin/gofmt \
     cytopia/gofmt -s -w $src_dirs
 
 docker run --rm -v "$PWD:/data" --entrypoint /usr/local/bin/goimports \
-    cytopia/goimports -local github.com/KonishchevDmitry/server-metrics -w $src_dirs
+    cytopia/goimports -local $package -w $src_dirs
+
+docker run --rm -v "$PWD:/data" golang \
+    bash -c 'go install github.com/daixiang0/gci@latest && cd /data && gci $0 "$@" > /dev/null' \
+    -local $package -w $src_dirs
 
 docker run --rm -t \
     -v "$PWD:/app" -w /app \
     -v "$PWD/.cache:/cache" -e GOCACHE=/cache/go -e GOMODCACHE=/cache/mod -e GOLANGCI_LINT_CACHE=/cache/lint \
-    golangci/golangci-lint:v1.42 golangci-lint run
+    golangci/golangci-lint:v1.43 golangci-lint run
