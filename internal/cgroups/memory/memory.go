@@ -2,9 +2,9 @@ package memory
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/math"
-	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
@@ -85,7 +85,7 @@ func (c *Collector) collectRoot(group *cgroups.Group, usage Usage) (Usage, bool,
 		if err != nil {
 			return usage, false, err
 		} else if !exists {
-			return usage, false, xerrors.Errorf("%q has been deleted during metrics collection", child.Path())
+			return usage, false, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 		}
 
 		for index, childUsage := range childUsage.ToUsage() {

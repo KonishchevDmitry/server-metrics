@@ -1,11 +1,10 @@
 package cgroupsutil
 
 import (
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
-
-	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
@@ -35,7 +34,7 @@ func parseNamedStat(propertyName string, reader io.Reader) (map[string]Stat, err
 				nameRead = true
 
 				if _, ok := stats[name]; ok {
-					return xerrors.Errorf("Got a duplicated %q name", name)
+					return fmt.Errorf("Got a duplicated %q name", name)
 				}
 
 				stats[name] = Stat{
@@ -46,24 +45,24 @@ func parseNamedStat(propertyName string, reader io.Reader) (map[string]Stat, err
 			}
 
 			if len(tokens) != 2 || !nameRead {
-				return xerrors.Errorf("Got an unexpected stat line: %q", line)
+				return fmt.Errorf("Got an unexpected stat line: %q", line)
 			}
 
 			value, err := strconv.ParseInt(tokens[1], 10, 64)
 			if err != nil {
-				return xerrors.Errorf("Got an unexpected stat line: %q", line)
+				return fmt.Errorf("Got an unexpected stat line: %q", line)
 			}
 
 			key := tokens[0]
 			if _, ok := stat[key]; ok {
-				return xerrors.Errorf("Got a duplicated %q key", key)
+				return fmt.Errorf("Got a duplicated %q key", key)
 			}
 
 			stat[key] = value
 		}
 
 		if len(stat) == 0 {
-			return xerrors.Errorf("Got an unexpected stat line: %q", line)
+			return fmt.Errorf("Got an unexpected stat line: %q", line)
 		}
 
 		return nil

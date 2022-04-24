@@ -2,8 +2,7 @@ package io
 
 import (
 	"context"
-
-	"golang.org/x/xerrors"
+	"fmt"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
@@ -107,7 +106,7 @@ func (c *Collector) collectRoot(root Usage, children []*cgroups.Group) error {
 		if err != nil {
 			return err
 		} else if !exists {
-			return xerrors.Errorf("%q has been deleted during metrics collection", child.Path())
+			return fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 		}
 
 		for device, usage := range childUsage {

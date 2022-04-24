@@ -2,8 +2,7 @@ package collector
 
 import (
 	"context"
-
-	"golang.org/x/xerrors"
+	"fmt"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
@@ -39,7 +38,7 @@ func (c *Collector) Collect(ctx context.Context) {
 
 	exists, err := c.observe(ctx, root, services)
 	if err == nil && !exists {
-		err = xerrors.Errorf("%q is not mounted", root.Path())
+		err = fmt.Errorf("%q is not mounted", root.Path())
 	}
 	if err != nil {
 		logging.L(ctx).Errorf("Failed to observe cgroups hierarchy: %s.", err)

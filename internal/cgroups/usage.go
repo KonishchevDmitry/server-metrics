@@ -1,7 +1,7 @@
 package cgroups
 
 import (
-	"golang.org/x/xerrors"
+	"fmt"
 )
 
 type ToUsage interface {
@@ -74,7 +74,7 @@ func diffUsage(current ToUsage, previous ToUsage) ([]Usage, error) {
 	for index, current := range currentUsages {
 		diff := *current.Value - *previousUsages[index].Value
 		if diff < 0 {
-			return nil, xerrors.Errorf("Got a negative %s", current.Name)
+			return nil, fmt.Errorf("Got a negative %s", current.Name)
 		}
 		diffUsages = append(diffUsages, MakeUsage(current.Name, &diff))
 	}

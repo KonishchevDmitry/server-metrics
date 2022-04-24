@@ -1,14 +1,14 @@
 package cgroups
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"io/ioutil"
 	"path"
 	"strconv"
 	"syscall"
-
-	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
@@ -58,13 +58,13 @@ func (g *Group) HasProcesses() (bool, bool, error) {
 	if exists, err := g.ReadProperty("cgroup.procs", func(file io.Reader) error {
 		return util.ParseFile(file, func(line string) error {
 			if _, err := strconv.ParseInt(line, 10, 32); err != nil {
-				return xerrors.Errorf("PID is expected, but got %q line", line)
+				return fmt.Errorf("PID is expected, but got %q line", line)
 			}
 			hasProcesses = true
 			return nil
 		})
 	}); err != nil {
-		if xerrors.Is(err, syscall.EOPNOTSUPP) {
+		if errors.Is(err, syscall.EOPNOTSUPP) {
 			// cgroup.type == threaded
 			return false, true, nil
 		}
@@ -101,7 +101,7 @@ func (g *Group) ReadProperty(name string, reader func(file io.Reader) error) (bo
 		}
 	}
 
-	return false, xerrors.Errorf("%q is missing", propertyPath)
+	return false, fmt.Errorf("%q is missing", propertyPath)
 }
 
 func (g *Group) list() ([]fs.FileInfo, bool, error) {
@@ -115,10 +115,10 @@ func (g *Group) list() ([]fs.FileInfo, bool, error) {
 func mapReadError(err error) error {
 	switch {
 	// The file is missing
-	case xerrors.Is(err, syscall.ENOENT):
+	case errors.Is(err, syscall.ENOENT):
 		return nil
 	// The file has been deleted during reading
-	case xerrors.Is(err, syscall.ENODEV):
+	case errors.Is(err, syscall.ENODEV):
 		return nil
 	default:
 		return err

@@ -2,11 +2,10 @@ package util
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strings"
-
-	"golang.org/x/xerrors"
 )
 
 func ReadFile(path string, reader func(file io.Reader) error) (resErr error) {
@@ -22,7 +21,7 @@ func ReadFile(path string, reader func(file io.Reader) error) (resErr error) {
 
 	err = reader(file)
 	if err != nil {
-		err = xerrors.Errorf("Failed to read %q: %w", path, err)
+		err = fmt.Errorf("Failed to read %q: %w", path, err)
 	}
 
 	return err

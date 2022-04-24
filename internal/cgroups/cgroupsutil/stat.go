@@ -1,11 +1,10 @@
 package cgroupsutil
 
 import (
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
-
-	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
@@ -19,7 +18,7 @@ type Stat struct {
 func (s *Stat) Get(name string) (int64, error) {
 	value, ok := s.stat[name]
 	if !ok {
-		return 0, xerrors.Errorf("%q entry of %s is missing", name, s.name)
+		return 0, fmt.Errorf("%q entry of %s is missing", name, s.name)
 	}
 	return value, nil
 }
@@ -41,17 +40,17 @@ func parseStat(reader io.Reader) (map[string]int64, error) {
 	if err := util.ParseFile(reader, func(line string) error {
 		tokens := strings.Split(line, " ")
 		if len(tokens) != 2 {
-			return xerrors.Errorf("Got an unexpected stat line: %q", line)
+			return fmt.Errorf("Got an unexpected stat line: %q", line)
 		}
 
 		name := tokens[0]
 		if _, ok := stat[name]; ok {
-			return xerrors.Errorf("Got a duplicated %q key", name)
+			return fmt.Errorf("Got a duplicated %q key", name)
 		}
 
 		value, err := strconv.ParseInt(tokens[1], 10, 64)
 		if err != nil {
-			return xerrors.Errorf("Got an unexpected stat line: %q", line)
+			return fmt.Errorf("Got an unexpected stat line: %q", line)
 		}
 
 		stat[name] = value

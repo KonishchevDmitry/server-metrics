@@ -2,23 +2,23 @@
 
 set -eu
 
-go get -u -t ./...
-go mod tidy
-
 package=github.com/KonishchevDmitry/server-metrics
+go_cache_args=(-v "$PWD/.cache:/cache" -e GOCACHE=/cache/go -e GOMODCACHE=/cache/mod)
 src_dirs="$(realpath --no-symlinks --relative-to "$PWD" $(go list -f '{{.Dir}}' ./...))"
 
-docker run --rm -v "$PWD:/data" --entrypoint /usr/local/bin/gofmt \
+set -x
+
+go get -u -t ./...
+go mod tidy
+go test ./...
+
+docker run --pull always --rm -v "$PWD:/data" --entrypoint /usr/local/bin/gofmt \
     cytopia/gofmt -s -w $src_dirs
 
-docker run --rm -v "$PWD:/data" --entrypoint /usr/local/bin/goimports \
-    cytopia/goimports -local $package -w $src_dirs
+docker run --pull always --rm -v "$PWD:/data" "${go_cache_args[@]}" golang \
+    bash -c 'go install -v github.com/daixiang0/gci@latest && cd /data && gci $0 "$@" > /dev/null' \
+    write --Section Standard --Section Default --Section "Prefix($package)" $src_dirs
 
-docker run --rm -v "$PWD:/data" golang \
-    bash -c 'go install github.com/daixiang0/gci@latest && cd /data && gci $0 "$@" > /dev/null' \
-    -local $package -w $src_dirs
-
-docker run --rm -t \
-    -v "$PWD:/app" -w /app \
-    -v "$PWD/.cache:/cache" -e GOCACHE=/cache/go -e GOMODCACHE=/cache/mod -e GOLANGCI_LINT_CACHE=/cache/lint \
-    golangci/golangci-lint:v1.43 golangci-lint run
+docker run --pull always --rm -t \
+    -v "$PWD:/app" -w /app "${go_cache_args[@]}" -e GOLANGCI_LINT_CACHE=/cache/lint \
+    golangci/golangci-lint golangci-lint run
