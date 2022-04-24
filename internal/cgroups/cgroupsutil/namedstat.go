@@ -24,21 +24,28 @@ func parseNamedStat(propertyName string, reader io.Reader) (map[string]Stat, err
 	stats := make(map[string]Stat)
 
 	if err := util.ParseFile(reader, func(line string) error {
-		tokens := strings.Split(line, " ")
-		if len(tokens) < 2 {
-			return xerrors.Errorf("Got an unexpected stat line: %q", line)
-		}
-
-		name := tokens[0]
-		if _, ok := stats[name]; ok {
-			return xerrors.Errorf("Got a duplicated %q name", name)
-		}
-
+		var nameRead bool
 		stat := make(map[string]int64)
 
-		for _, token := range tokens[1:] {
+		for _, token := range strings.Split(line, " ") {
 			tokens := strings.Split(token, "=")
-			if len(tokens) != 2 {
+
+			if len(tokens) == 1 && len(stat) == 0 {
+				name := tokens[0]
+				nameRead = true
+
+				if _, ok := stats[name]; ok {
+					return xerrors.Errorf("Got a duplicated %q name", name)
+				}
+
+				stats[name] = Stat{
+					name: propertyName,
+					stat: stat,
+				}
+				continue
+			}
+
+			if len(tokens) != 2 || !nameRead {
 				return xerrors.Errorf("Got an unexpected stat line: %q", line)
 			}
 
@@ -55,10 +62,10 @@ func parseNamedStat(propertyName string, reader io.Reader) (map[string]Stat, err
 			stat[key] = value
 		}
 
-		stats[name] = Stat{
-			name: propertyName,
-			stat: stat,
+		if len(stat) == 0 {
+			return xerrors.Errorf("Got an unexpected stat line: %q", line)
 		}
+
 		return nil
 	}); err != nil {
 		return nil, err
