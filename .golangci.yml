@@ -6,6 +6,7 @@ linters:
   disable:
     - cyclop
     - exhaustivestruct
+    - exhaustruct
     - funlen
     - forcetypeassert
     - gochecknoglobals
@@ -19,6 +20,7 @@ linters:
     - lll
     - nestif
     - nlreturn
+    - nonamedreturns
     - paralleltest
     - testpackage
     - varnamelen
