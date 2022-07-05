@@ -11,6 +11,7 @@ docker stop "$name" > /dev/null ||:
 docker rm "$name" > /dev/null ||:
 docker run --pid host --read-only --detach --publish 127.0.0.1:9101:9101 --restart unless-stopped \
     --mount type=bind,src=/dev,dst=/dev,readonly \
+    --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
     --mount type=bind,src=/sys/fs/cgroup,dst=/sys/fs/cgroup,readonly \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
     --name "$name" --log-opt "tag=$name" "$full_name:stable" > /dev/null

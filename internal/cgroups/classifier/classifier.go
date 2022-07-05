@@ -3,17 +3,25 @@ package classifier
 import (
 	"context"
 	"path"
+	"strconv"
 	"strings"
 
+	"golang.org/x/xerrors"
+
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
+	"github.com/KonishchevDmitry/server-metrics/internal/users"
 )
 
 type Classifier struct {
+	users  users.Resolver
 	docker docker.Resolver
 }
 
-func New(docker docker.Resolver) *Classifier {
-	return &Classifier{docker: docker}
+func New(users users.Resolver, docker docker.Resolver) *Classifier {
+	return &Classifier{
+		users:  users,
+		docker: docker,
+	}
 }
 
 func (c *Classifier) ClassifySlice(ctx context.Context, name string) (
@@ -30,8 +38,6 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (
 		return classify("kernel", false)
 	case "/init.scope":
 		return classify("init", false)
-	case "/user.slice":
-		return classify("user", true)
 	}
 
 	parent, child := path.Split(name)
@@ -42,11 +48,12 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (
 		return classify(child, false)
 	}
 
-	if parent == "/system.slice" {
-		trimChild := func(prefix string, suffix string) string {
-			return child[len(prefix) : len(child)-len(suffix)]
-		}
+	trimChild := func(prefix string, suffix string) string {
+		return child[len(prefix) : len(child)-len(suffix)]
+	}
 
+	switch parent {
+	case "/system.slice":
 		const serviceSuffix = ".service"
 
 		const serviceGroupPrefix = "system-"
@@ -81,6 +88,21 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (
 
 		case strings.HasPrefix(child, dockerBuilderPrefix) && path.Ext(child[len(dockerBuilderPrefix):]) == "":
 			return classify("docker-builder", false)
+		}
+
+	case "/user.slice":
+		const prefix = "user-"
+		const suffix = ".slice"
+
+		if strings.HasPrefix(child, prefix) && strings.HasSuffix(child, suffix) {
+			if uid, err := strconv.Atoi(trimChild(prefix, suffix)); err == nil && uid >= 0 {
+				userName, err := c.users.Resolve(uid)
+				if err != nil {
+					err = xerrors.Errorf("Unable to resolve %d user ID: %w", uid, err)
+					return "", false, false, err
+				}
+				return classify(userName, true)
+			}
 		}
 	}
 

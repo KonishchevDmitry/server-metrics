@@ -12,6 +12,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
+	"github.com/KonishchevDmitry/server-metrics/internal/users"
 )
 
 func run() error {
@@ -61,7 +62,7 @@ func execute(cmd *cobra.Command) error {
 		}
 	}()
 
-	collector := collector.NewCollector(classifier.New(dockerResolver))
+	collector := collector.NewCollector(classifier.New(users.NewResolver(), dockerResolver))
 
 	if develMode {
 		logger.Info("Running in test mode.")
