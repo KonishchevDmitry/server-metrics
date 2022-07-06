@@ -28,15 +28,30 @@ func NewCollector() *Collector {
 func (c *Collector) Reset() {
 }
 
-// FIXME(konishchev): Exclude support
 func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
 	usage, exists, err := c.collect(group)
 	if err != nil || !exists {
 		return exists, err
 	}
 
+	var isRoot, isOptionalChildren bool
+	var children []*cgroups.Group
+
 	if group.IsRoot() {
-		usage, exists, err = c.collectRoot(group, usage)
+		isRoot = true
+		children, exists, err = group.Children()
+		if err != nil || !exists {
+			return exists, err
+		}
+	} else if len(exclude) != 0 {
+		isRoot, isOptionalChildren = true, true
+		for _, name := range exclude {
+			children = append(children, group.Child(name))
+		}
+	}
+
+	if isRoot {
+		usage, exists, err = c.collectRoot(usage, children, isOptionalChildren)
 		if err != nil || !exists {
 			return exists, err
 		}
@@ -73,19 +88,17 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 	return usage, true, nil
 }
 
-func (c *Collector) collectRoot(group *cgroups.Group, usage Usage) (Usage, bool, error) {
+func (c *Collector) collectRoot(usage Usage, children []*cgroups.Group, isOptionalChildren bool) (Usage, bool, error) {
 	rootUsages := usage.ToUsage()
-
-	children, exists, err := group.Children()
-	if err != nil || !exists {
-		return usage, exists, err
-	}
 
 	for _, child := range children {
 		childUsage, exists, err := c.collect(child)
 		if err != nil {
 			return usage, false, err
 		} else if !exists {
+			if isOptionalChildren {
+				continue
+			}
 			return usage, false, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 		}
 
