@@ -1,8 +1,11 @@
 package collector
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+
+	"go.uber.org/zap"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
@@ -54,12 +57,9 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 	needsCollection := classification.TotalCollection
 
 	if classification.TotalCollection {
-		// FIXME(konishchev): Exclude support
-		if false {
-			for _, name := range classification.TotalExcludeChildren {
-				if _, err := c.observe(ctx, group.Child(name), services); err != nil {
-					return false, err
-				}
+		for _, name := range classification.TotalExcludeChildren {
+			if _, err := c.observe(ctx, group.Child(name), services); err != nil {
+				return false, err
 			}
 		}
 	} else {
@@ -107,7 +107,7 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 	}
 	services[classification.Service] = group.Name
 
-	if exists, err := c.collect(ctx, classification.Service, group); err != nil {
+	if exists, err := c.collect(ctx, classification.Service, group, classification.TotalExcludeChildren); err != nil {
 		logging.L(ctx).Errorf("Failed to collect metrics for %s cgroup: %s.", group.Name, err)
 	} else if !exists {
 		return false, nil
@@ -116,12 +116,28 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 	return true, nil
 }
 
-// FIXME(konishchev): Exclude support
-func (c *Collector) collect(ctx context.Context, service string, group *cgroups.Group) (bool, error) {
-	logging.L(ctx).Debugf("Collecting %s as %s:", group.Name, service)
+func (c *Collector) collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
+	if logger := logging.L(ctx); logger.Desugar().Core().Enabled(zap.DebugLevel) {
+		var buf bytes.Buffer
+		_, _ = fmt.Fprintf(&buf, "Collecting %s", group.Name)
+
+		if len(exclude) != 0 {
+			buf.WriteString(" (excluding ")
+			for index, name := range exclude {
+				if index != 0 {
+					buf.WriteByte(',')
+				}
+				buf.WriteString(name)
+			}
+			buf.WriteByte(')')
+		}
+
+		_, _ = fmt.Fprintf(&buf, " as %s:", service)
+		logger.Debug(buf.String())
+	}
 
 	for _, collector := range c.collectors {
-		if exists, err := collector.Collect(ctx, service, group, nil); err != nil || !exists {
+		if exists, err := collector.Collect(ctx, service, group, exclude); err != nil || !exists {
 			return exists, err
 		}
 	}

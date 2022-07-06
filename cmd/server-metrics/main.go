@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -67,6 +68,11 @@ func execute(cmd *cobra.Command) error {
 	if develMode {
 		logger.Info("Running in test mode.")
 		collector.Collect(ctx)
+
+		logger.Info("Sleeping...")
+		time.Sleep(5 * time.Second)
+		collector.Collect(ctx)
+
 		return nil
 	}
 

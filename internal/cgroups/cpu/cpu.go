@@ -14,33 +14,37 @@ var userMetric = metrics.ServiceMetric("cpu", "user", "CPU time consumed in user
 var systemMetric = metrics.ServiceMetric("cpu", "system", "CPU time consumed in system (kernel) mode.")
 
 type Collector struct {
-	lastRootUsage *rootUsage
-	netRootUsage  Usage
+	roots map[string]*rootState
 }
 
 var _ cgroups.Collector = &Collector{}
 
 func NewCollector() *Collector {
-	return &Collector{}
+	return &Collector{roots: make(map[string]*rootState)}
 }
 
 func (c *Collector) Reset() {
 }
 
-// FIXME(konishchev): Exclude support
 func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
 	var (
-		children []*cgroups.Group
-		exists   bool
-		err      error
+		isRoot             bool
+		children           []*cgroups.Group
+		isOptionalChildren bool
+		exists             bool
+		err                error
 	)
 
-	isRoot := group.IsRoot()
-
-	if isRoot {
+	if group.IsRoot() {
+		isRoot = true
 		children, exists, err = group.Children()
 		if err != nil || !exists {
 			return exists, err
+		}
+	} else if len(exclude) != 0 {
+		isRoot, isOptionalChildren = true, true
+		for _, name := range exclude {
+			children = append(children, group.Child(name))
 		}
 	}
 
@@ -50,10 +54,10 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 	}
 
 	if isRoot {
-		if err := c.collectRoot(usage, children); err != nil {
+		usage, err = c.collectRoot(group, usage, children, isOptionalChildren)
+		if err != nil {
 			return true, err
 		}
-		usage = c.netRootUsage
 	}
 
 	c.record(ctx, service, usage)
@@ -78,27 +82,36 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 	return usage, true, nil
 }
 
-func (c *Collector) collectRoot(root Usage, children []*cgroups.Group) error {
-	current := rootUsage{root: root}
+func (c *Collector) collectRoot(
+	group *cgroups.Group, usage Usage, children []*cgroups.Group, isOptionalChildren bool,
+) (Usage, error) {
+	current := rootUsage{root: usage}
 
 	for _, child := range children {
 		childUsage, exists, err := c.collect(child)
 		if err != nil {
-			return err
+			return Usage{}, err
 		} else if !exists {
-			return fmt.Errorf("%q has been deleted during metrics collection", child.Path())
+			if isOptionalChildren {
+				continue
+			}
+			return Usage{}, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 		}
 		cgroups.AddUsage(&current.children, &childUsage)
 	}
 
-	if c.lastRootUsage != nil {
-		if err := cgroups.CalculateRootGroupUsage(&c.netRootUsage, &current, c.lastRootUsage); err != nil {
-			return err
+	state, ok := c.roots[group.Name]
+	if ok {
+		if err := cgroups.CalculateRootGroupUsage(&state.netUsage, &current, &state.lastUsage); err != nil {
+			return Usage{}, err
 		}
+	} else {
+		state = &rootState{}
+		c.roots[group.Name] = state
 	}
 
-	c.lastRootUsage = &current
-	return nil
+	state.lastUsage = current
+	return state.netUsage, nil
 }
 
 func (c *Collector) record(ctx context.Context, service string, usage Usage) {
@@ -136,4 +149,9 @@ var _ cgroups.ToRootUsage = &rootUsage{}
 
 func (u *rootUsage) ToRootUsage() (cgroups.ToUsage, cgroups.ToUsage) {
 	return &u.root, &u.children
+}
+
+type rootState struct {
+	lastUsage rootUsage
+	netUsage  Usage
 }
