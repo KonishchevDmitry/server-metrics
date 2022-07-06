@@ -28,7 +28,8 @@ func (c *Collector) Reset() {
 	c.resolver.reset()
 }
 
-func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group) (bool, error) {
+// FIXME(konishchev): Exclude support
+func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
 	var (
 		children []*cgroups.Group
 		exists   bool

@@ -28,33 +28,48 @@ func TestClassifier(t *testing.T) {
 	classifier := New(userResolver, dockerResolver)
 
 	for _, testCase := range []struct {
-		group   string
-		service string
-		total   bool
+		group          string
+		service        string
+		totalExcluding []string
 	}{
-		{"/", "kernel", false},
-		{"/init.scope", "init", false},
-		{"/sys-fs-fuse-connections.mount", "sys-fs-fuse-connections.mount", false},
+		{"/", "kernel", nil},
+		{"/init.scope", "init", nil},
+		{"/sys-fs-fuse-connections.mount", "sys-fs-fuse-connections.mount", nil},
 
-		{"/system.slice", "", false},
-		{"/system.slice/boot-efi.mount", "boot-efi.mount", false},
-		{"/system.slice/docker-3413aa74fd2ff75f15b32438dce58a63b73bc04c4bd476ca7ab54c12da6a43d4.scope", "server-metrics", false},
-		{"/system.slice/docker-89eae77df5fb5de73ccc3eff21cd7f1c72434fef6ade1328924315ebe7eeadd5.scope", "docker-containers", false},
-		{"/system.slice/nginx.service", "nginx", false},
-		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", false},
-		{"/system.slice/system-openvpn\\x2dserver.slice", "openvpn-server", true},
-		{"/system.slice/systemd-journald-dev-log.socket", "systemd-journald-dev-log.socket", false},
+		{"/system.slice", "", nil},
+		{"/system.slice/boot-efi.mount", "boot-efi.mount", nil},
+		{"/system.slice/docker-3413aa74fd2ff75f15b32438dce58a63b73bc04c4bd476ca7ab54c12da6a43d4.scope", "server-metrics", nil},
+		{"/system.slice/docker-89eae77df5fb5de73ccc3eff21cd7f1c72434fef6ade1328924315ebe7eeadd5.scope", "docker-containers", nil},
+		{"/system.slice/nginx.service", "nginx", nil},
+		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", nil},
+		{"/system.slice/system-openvpn\\x2dserver.slice", "openvpn-server", []string{}},
+		{"/system.slice/systemd-journald-dev-log.socket", "systemd-journald-dev-log.socket", nil},
 
-		{"/user.slice", "", false},
-		{"/user.slice/user-1000.slice", "dmitry", true},
+		{"/user.slice", "", nil},
+		{"/user.slice/user-1000.slice", "dmitry", []string{"user@1000.service"}},
+		{"/user.slice/user-1000.slice/user@1000.service/init.scope", "dmitry/init", nil},
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice", "", nil},
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/dbus.socket", "dmitry/dbus.socket", nil},
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/app-vm.slice", "dmitry/vm", []string{}},
 	} {
 		testCase := testCase
 		t.Run(testCase.group, func(t *testing.T) {
-			service, total, ok, err := classifier.ClassifySlice(ctx, testCase.group)
+			classification, ok, err := classifier.ClassifySlice(ctx, testCase.group)
 			require.NoError(t, err)
 			require.Equal(t, testCase.service != "", ok)
-			require.Equal(t, testCase.total, total)
-			require.Equal(t, testCase.service, service)
+			require.Equal(t, testCase.service, classification.Service)
+
+			if testCase.totalExcluding == nil {
+				require.False(t, classification.TotalCollection)
+				require.Empty(t, classification.TotalExcludeChildren)
+			} else {
+				require.True(t, classification.TotalCollection)
+				if len(testCase.totalExcluding) == 0 {
+					require.Nil(t, classification.TotalExcludeChildren)
+				} else {
+					require.Equal(t, testCase.totalExcluding, classification.TotalExcludeChildren)
+				}
+			}
 		})
 	}
 }

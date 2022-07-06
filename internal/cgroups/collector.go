@@ -4,5 +4,5 @@ import "context"
 
 type Collector interface {
 	Reset()
-	Collect(ctx context.Context, service string, group *Group) (bool, error)
+	Collect(ctx context.Context, service string, group *Group, exclude []string) (bool, error)
 }

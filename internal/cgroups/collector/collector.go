@@ -46,14 +46,23 @@ func (c *Collector) Collect(ctx context.Context) {
 }
 
 func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services map[string]string) (bool, error) {
-	service, totalCollection, classified, err := c.classifier.ClassifySlice(ctx, group.Name)
+	classification, classified, err := c.classifier.ClassifySlice(ctx, group.Name)
 	if err != nil {
 		logging.L(ctx).Errorf("Failed to classify %q cgroup: %s.", group.Name, err)
 		return true, nil
 	}
-	needsCollection := totalCollection
+	needsCollection := classification.TotalCollection
 
-	if !totalCollection {
+	if classification.TotalCollection {
+		// FIXME(konishchev): Exclude support
+		if false {
+			for _, name := range classification.TotalExcludeChildren {
+				if _, err := c.observe(ctx, group.Child(name), services); err != nil {
+					return false, err
+				}
+			}
+		}
+	} else {
 		var observeChildren bool
 
 		if group.IsRoot() {
@@ -92,13 +101,13 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 		return true, nil
 	}
 
-	if otherGroup, ok := services[service]; ok {
-		logging.L(ctx).Errorf("Both %q and %q resolve to %q service.", otherGroup, group.Name, service)
+	if otherGroup, ok := services[classification.Service]; ok {
+		logging.L(ctx).Errorf("Both %q and %q resolve to %q service.", otherGroup, group.Name, classification.Service)
 		return true, nil
 	}
-	services[service] = group.Name
+	services[classification.Service] = group.Name
 
-	if exists, err := c.collect(ctx, service, group); err != nil {
+	if exists, err := c.collect(ctx, classification.Service, group); err != nil {
 		logging.L(ctx).Errorf("Failed to collect metrics for %s cgroup: %s.", group.Name, err)
 	} else if !exists {
 		return false, nil
@@ -107,11 +116,12 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 	return true, nil
 }
 
+// FIXME(konishchev): Exclude support
 func (c *Collector) collect(ctx context.Context, service string, group *cgroups.Group) (bool, error) {
 	logging.L(ctx).Debugf("Collecting %s as %s:", group.Name, service)
 
 	for _, collector := range c.collectors {
-		if exists, err := collector.Collect(ctx, service, group); err != nil || !exists {
+		if exists, err := collector.Collect(ctx, service, group, nil); err != nil || !exists {
 			return exists, err
 		}
 	}
