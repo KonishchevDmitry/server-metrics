@@ -17,7 +17,7 @@ docker run --pull always --rm -v "$PWD:/data" --entrypoint /usr/local/bin/gofmt 
 
 docker run --pull always --rm -v "$PWD:/data" "${go_cache_args[@]}" golang \
     bash -c 'go install -v github.com/daixiang0/gci@latest && cd /data && gci $0 "$@" > /dev/null' \
-    write --Section Standard --Section Default --Section "Prefix($package)" $src_dirs
+    write --section standard --section default --section "prefix($package)" $src_dirs
 
 docker run --pull always --rm -t \
     -v "$PWD:/app" -w /app "${go_cache_args[@]}" -e GOLANGCI_LINT_CACHE=/cache/lint \
