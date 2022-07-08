@@ -10,17 +10,16 @@ import (
 )
 
 type Collector struct {
-	resolver      *deviceResolver
-	lastRootUsage map[string]*rootUsage
-	netRootUsage  Usage
+	resolver *deviceResolver
+	roots    map[string]*rootState
 }
 
 var _ cgroups.Collector = &Collector{}
 
 func NewCollector() *Collector {
 	return &Collector{
-		resolver:     newDeviceResolver(),
-		netRootUsage: make(Usage),
+		resolver: newDeviceResolver(),
+		roots:    make(map[string]*rootState),
 	}
 }
 
@@ -28,20 +27,25 @@ func (c *Collector) Reset() {
 	c.resolver.reset()
 }
 
-// FIXME(konishchev): Exclude support
 func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
 	var (
-		children []*cgroups.Group
-		exists   bool
-		err      error
+		isRoot             bool
+		children           []*cgroups.Group
+		isOptionalChildren bool
+		exists             bool
+		err                error
 	)
 
-	isRoot := group.IsRoot()
-
-	if isRoot {
+	if group.IsRoot() {
+		isRoot = true
 		children, exists, err = group.Children()
 		if err != nil || !exists {
 			return exists, err
+		}
+	} else if len(exclude) != 0 {
+		isRoot, isOptionalChildren = true, true
+		for _, name := range exclude {
+			children = append(children, group.Child(name))
 		}
 	}
 
@@ -51,10 +55,10 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 	}
 
 	if isRoot {
-		if err := c.collectRoot(usage, children); err != nil {
+		usage, err = c.collectRoot(group, usage, children, isOptionalChildren)
+		if err != nil {
 			return true, err
 		}
-		usage = c.netRootUsage
 	}
 
 	c.record(ctx, service, usage)
@@ -96,18 +100,23 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 	return usage, true, nil
 }
 
-func (c *Collector) collectRoot(root Usage, children []*cgroups.Group) error {
-	current := make(map[string]*rootUsage, len(root))
-	for device, usage := range root {
+func (c *Collector) collectRoot(
+	group *cgroups.Group, totalUsage Usage, children []*cgroups.Group, isOptionalChildren bool,
+) (Usage, error) {
+	current := make(map[string]*rootUsage, len(totalUsage))
+	for device, usage := range totalUsage {
 		current[device] = &rootUsage{root: *usage}
 	}
 
 	for _, child := range children {
 		childUsage, exists, err := c.collect(child)
 		if err != nil {
-			return err
+			return Usage{}, err
 		} else if !exists {
-			return fmt.Errorf("%q has been deleted during metrics collection", child.Path())
+			if isOptionalChildren {
+				continue
+			}
+			return Usage{}, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 		}
 
 		for device, usage := range childUsage {
@@ -120,25 +129,34 @@ func (c *Collector) collectRoot(root Usage, children []*cgroups.Group) error {
 		}
 	}
 
-	for device, current := range current {
-		last, ok := c.lastRootUsage[device]
-		if !ok {
-			continue
-		}
+	state, ok := c.roots[group.Name]
+	if ok && state.lastUsage != nil {
+		for device, current := range current {
+			last, ok := state.lastUsage[device]
+			if !ok {
+				last = &rootUsage{}
+			}
 
-		netRootUsage, ok := c.netRootUsage[device]
-		if !ok {
-			netRootUsage = &deviceUsage{}
-			c.netRootUsage[device] = netRootUsage
-		}
+			netRootUsage, ok := state.netUsage[device]
+			if !ok {
+				netRootUsage = &deviceUsage{}
+				state.netUsage[device] = netRootUsage
+			}
 
-		if err := cgroups.CalculateRootGroupUsage(netRootUsage, current, last); err != nil {
-			return err
+			if err := cgroups.CalculateRootGroupUsage(netRootUsage, current, last); err != nil {
+				state.lastUsage = nil
+				return Usage{}, err
+			}
 		}
+	} else if ok {
+		// We decided to forget last usage on previous call, so just obtain a new one
+	} else {
+		state = &rootState{netUsage: make(Usage)}
+		c.roots[group.Name] = state
 	}
 
-	c.lastRootUsage = current
-	return nil
+	state.lastUsage = current
+	return state.netUsage, nil
 }
 
 func (c *Collector) record(ctx context.Context, service string, usage Usage) {
@@ -190,4 +208,9 @@ var _ cgroups.ToRootUsage = &rootUsage{}
 
 func (u *rootUsage) ToRootUsage() (cgroups.ToUsage, cgroups.ToUsage) {
 	return &u.root, &u.children
+}
+
+type rootState struct {
+	lastUsage map[string]*rootUsage
+	netUsage  Usage
 }
