@@ -24,13 +24,29 @@ func NewCollector() *Collector {
 }
 
 func (c *Collector) Reset() {
+	for _, state := range c.roots {
+		state.collected = false
+	}
+}
+
+func (c *Collector) GC(ctx context.Context) {
+	for name, state := range c.roots {
+		if !state.collected {
+			if cgroups.NewGroup(name).IsRoot() {
+				logging.L(ctx).Errorf("cpu: %q hasn't been collected.", name)
+			} else {
+				logging.L(ctx).Debugf("cpu: %q root hasn't been collected. Assuming it deleted and dropping its state.", name)
+				delete(c.roots, name)
+			}
+		}
+	}
 }
 
 func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
 	var (
 		isRoot             bool
 		children           []*cgroups.Group
-		isOptionalChildren bool
+		isExpectedChildren bool
 		exists             bool
 		err                error
 	)
@@ -42,7 +58,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 			return exists, err
 		}
 	} else if len(exclude) != 0 {
-		isRoot, isOptionalChildren = true, true
+		isRoot, isExpectedChildren = true, true
 		for _, name := range exclude {
 			children = append(children, group.Child(name))
 		}
@@ -54,7 +70,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 	}
 
 	if isRoot {
-		usage, err = c.collectRoot(group, usage, children, isOptionalChildren)
+		usage, err = c.collectRoot(group, usage, children, isExpectedChildren)
 		if err != nil {
 			return true, err
 		}
@@ -83,7 +99,7 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 }
 
 func (c *Collector) collectRoot(
-	group *cgroups.Group, usage Usage, children []*cgroups.Group, isOptionalChildren bool,
+	group *cgroups.Group, usage Usage, children []*cgroups.Group, isExpectedChildren bool,
 ) (Usage, error) {
 	current := rootUsage{root: usage}
 
@@ -92,10 +108,11 @@ func (c *Collector) collectRoot(
 		if err != nil {
 			return Usage{}, err
 		} else if !exists {
-			if isOptionalChildren {
-				continue
+			if isExpectedChildren {
+				return Usage{}, fmt.Errorf("%q is missing, but is expected to exist", child.Path())
+			} else {
+				return Usage{}, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 			}
-			return Usage{}, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 		}
 		cgroups.AddUsage(&current.children, &childUsage)
 	}
@@ -111,6 +128,8 @@ func (c *Collector) collectRoot(
 	}
 
 	state.lastUsage = current
+	state.collected = true
+
 	return state.netUsage, nil
 }
 
@@ -154,4 +173,5 @@ func (u *rootUsage) ToRootUsage() (cgroups.ToUsage, cgroups.ToUsage) {
 type rootState struct {
 	lastUsage rootUsage
 	netUsage  Usage
+	collected bool
 }

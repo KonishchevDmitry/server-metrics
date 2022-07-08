@@ -28,6 +28,9 @@ func NewCollector() *Collector {
 func (c *Collector) Reset() {
 }
 
+func (c *Collector) GC(ctx context.Context) {
+}
+
 func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
 	usage, exists, err := c.collect(group)
 	if err != nil || !exists {

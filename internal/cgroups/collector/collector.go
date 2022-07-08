@@ -45,6 +45,11 @@ func (c *Collector) Collect(ctx context.Context) {
 	}
 	if err != nil {
 		logging.L(ctx).Errorf("Failed to observe cgroups hierarchy: %s.", err)
+		return
+	}
+
+	for _, collector := range c.collectors {
+		collector.GC(ctx)
 	}
 }
 
