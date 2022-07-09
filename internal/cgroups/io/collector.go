@@ -188,7 +188,7 @@ func (c *Collector) record(ctx context.Context, service string, usage Usage) {
 
 		labels := newLabels(service, device)
 
-		readsMetric.With(labels).Set(float64(stat.read))
+		readsMetric.With(labels).Set(float64(stat.reads))
 		writesMetric.With(labels).Set(float64(stat.writes))
 
 		readBytesMetric.With(labels).Set(float64(stat.read))
