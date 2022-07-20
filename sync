@@ -3,7 +3,7 @@
 set -eu
 
 package=github.com/KonishchevDmitry/server-metrics
-go_cache_args=(-v "$PWD/.cache:/cache" -e GOCACHE=/cache/go -e GOMODCACHE=/cache/mod)
+go_cache_args=(-v "$HOME/.cache/go-containers:/cache" -e GOCACHE=/cache/go -e GOMODCACHE=/cache/mod)
 src_dirs="$(realpath --no-symlinks --relative-to "$PWD" $(go list -f '{{.Dir}}' ./...))"
 
 set -x
