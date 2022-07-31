@@ -32,8 +32,9 @@ func New(users users.Resolver, docker docker.Resolver) *Classifier {
 	}
 }
 
+var systemSlicePathRegex = regexp.MustCompile(`^/system\.slice(/system-[^/]+.slice)?$`)
 var userSliceNameRegex = regexp.MustCompile(`^user-(\d+)\.slice$`)
-var userSlicePathRegex = regexp.MustCompile(`^/user\.slice(/user-(\d+)\.slice(/user@\d+\.service(/app\.slice)?)?)?$`)
+var userSlicePathRegex = regexp.MustCompile(`^/user\.slice(/user-(\d+)\.slice(/user@\d+\.service(/app\.slice(?:/app-[^/]+.slice)?)?)?)?$`)
 
 func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classification, bool, error) {
 	name = strings.ReplaceAll(name, `\x2d`, `-`)
@@ -51,7 +52,7 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 			return system.classify("init")
 		}
 		return c.classifySupplementaryChild(system, child)
-	} else if parent == "/system.slice" {
+	} else if match := systemSlicePathRegex.FindStringSubmatch(parent); len(match) != 0 {
 		if classification, ok, err := c.classifyServiceSliceChild(ctx, system, child); err != nil || ok {
 			return classification, ok, err
 		}
@@ -99,7 +100,8 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 			return Classification{}, false, nil
 		}
 
-		// /user.slice/user-1000.slice/user@1000.service/app.slice
+		// /user.slice/user-1000.slice/user@1000.service/app.slice/*
+		// /user.slice/user-1000.slice/user@1000.service/app.slice/app-*.slice/*
 		if classification, ok, err := c.classifyServiceSliceChild(ctx, user, child); err != nil || ok {
 			return classification, ok, err
 		}
@@ -124,11 +126,6 @@ func (c *Classifier) classifyServiceSliceChild(ctx context.Context, context clas
 	serviceSuffix := ".service"
 	if strings.HasSuffix(name, serviceSuffix) {
 		return context.classify(trim("", name, serviceSuffix))
-	}
-
-	serviceGroupPrefix, serviceGroupSuffix := fmt.Sprintf("%s-", context.slice), ".slice"
-	if strings.HasPrefix(name, serviceGroupPrefix) && strings.HasSuffix(name, serviceGroupSuffix) {
-		return context.classifyTotal(trim(serviceGroupPrefix, name, serviceGroupSuffix))
 	}
 
 	dockerPrefix, dockerSuffix := "docker-", ".scope"
