@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -eu
+export DOCKER_CONTEXT=server
 
 name=server-metrics
 full_name=konishchev/$name
