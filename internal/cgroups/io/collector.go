@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
@@ -27,6 +29,9 @@ func (c *Collector) Reset() {
 	c.resolver.reset()
 	for _, state := range c.roots {
 		state.collected = false
+	}
+	for _, metric := range []*prometheus.GaugeVec{readsMetric, writesMetric, readBytesMetric, writtenBytesMetric} {
+		metric.Reset()
 	}
 }
 

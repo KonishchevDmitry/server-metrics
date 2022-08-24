@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	model "github.com/prometheus/client_model/go"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 
@@ -13,7 +15,8 @@ import (
 
 func Start(logger *zap.SugaredLogger, collect func(ctx context.Context)) error {
 	lock := semaphore.NewWeighted(1)
-	prometheusHandler := promhttp.Handler()
+	gatherer := lockedGatherer{lock: lock}
+	prometheusHandler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
 
 	http.HandleFunc("/metrics", func(writer http.ResponseWriter, request *http.Request) {
 		ctx := logging.WithLogger(request.Context(), logger)
@@ -21,13 +24,23 @@ func Start(logger *zap.SugaredLogger, collect func(ctx context.Context)) error {
 		if lock.Acquire(ctx, 1) != nil {
 			return
 		}
-		func() {
-			collect(ctx)
-			lock.Release(1)
-		}()
+		collect(ctx)
+		lock.Release(1)
 
 		prometheusHandler.ServeHTTP(writer, request)
 	})
 
 	return http.ListenAndServe(":9101", nil)
+}
+
+type lockedGatherer struct {
+	lock *semaphore.Weighted
+}
+
+func (g lockedGatherer) Gather() ([]*model.MetricFamily, error) {
+	if err := g.lock.Acquire(context.Background(), 1); err != nil {
+		return nil, err
+	}
+	defer g.lock.Release(1)
+	return prometheus.DefaultGatherer.Gather()
 }

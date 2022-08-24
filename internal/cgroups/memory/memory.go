@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pkg/math"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
@@ -30,6 +31,9 @@ func NewCollector() *Collector {
 }
 
 func (c *Collector) Reset() {
+	for _, metric := range []*prometheus.GaugeVec{rssMetric, swapMetric, cacheMetric, kernelMetric} {
+		metric.Reset()
+	}
 }
 
 func (c *Collector) GC(ctx context.Context) {
