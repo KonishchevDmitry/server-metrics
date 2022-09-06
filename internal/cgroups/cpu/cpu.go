@@ -75,9 +75,9 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 	}
 
 	if isRoot {
-		usage, err = c.collectRoot(group, usage, children, isExpectedChildren)
-		if err != nil {
-			return true, err
+		usage, exists, err = c.collectRoot(group, usage, children, isExpectedChildren)
+		if err != nil || !exists {
+			return exists, err
 		}
 	}
 
@@ -105,18 +105,22 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 
 func (c *Collector) collectRoot(
 	group *cgroups.Group, usage Usage, children []*cgroups.Group, isExpectedChildren bool,
-) (Usage, error) {
+) (Usage, bool, error) {
 	current := rootUsage{root: usage}
 
 	for _, child := range children {
 		childUsage, exists, err := c.collect(child)
 		if err != nil {
-			return Usage{}, err
+			return Usage{}, false, err
 		} else if !exists {
 			if isExpectedChildren {
-				return Usage{}, fmt.Errorf("%q is missing, but is expected to exist", child.Path())
+				// Assuming a race due to user session closing
+				if _, exists, err := c.collect(group); err != nil || !exists {
+					return Usage{}, exists, err
+				}
+				return Usage{}, false, fmt.Errorf("%q is missing, but is expected to exist", child.Path())
 			} else {
-				return Usage{}, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
+				return Usage{}, false, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 			}
 		}
 		cgroups.AddUsage(&current.children, &childUsage)
@@ -125,7 +129,7 @@ func (c *Collector) collectRoot(
 	state, ok := c.roots[group.Name]
 	if ok {
 		if err := cgroups.CalculateRootGroupUsage(&state.netUsage, &current, &state.lastUsage); err != nil {
-			return Usage{}, err
+			return Usage{}, false, err
 		}
 	} else {
 		state = &rootState{}
@@ -135,7 +139,7 @@ func (c *Collector) collectRoot(
 	state.lastUsage = current
 	state.collected = true
 
-	return state.netUsage, nil
+	return state.netUsage, true, nil
 }
 
 func (c *Collector) record(ctx context.Context, service string, usage Usage) {
