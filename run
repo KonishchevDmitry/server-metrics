@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
 set -eu
+export DOCKER_CONTEXT=server
 
-export DOCKER_BUILDKIT=1
-docker build -t konishchev/server-metrics .
-docker run --rm --pid host --read-only --publish 9102:9101 \
+DOCKER_BUILDKIT=1 docker build -t konishchev/server-metrics .
+
+docker run --rm --publish 127.0.0.1:9102:9101 \
+    --pid host --read-only --cap-drop all --security-opt no-new-privileges \
     --mount type=bind,src=/dev,dst=/dev,readonly \
     --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
     --mount type=bind,src=/sys/fs/cgroup,dst=/sys/fs/cgroup,readonly \

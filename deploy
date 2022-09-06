@@ -8,9 +8,13 @@ full_name=konishchev/$name
 
 DOCKER_BUILDKIT=1 docker build --pull --tag "$full_name:stable" .
 
-docker stop "$name" > /dev/null ||:
-docker rm "$name" > /dev/null ||:
-docker run --pid host --read-only --detach --publish 127.0.0.1:9101:9101 --restart unless-stopped \
+if docker inspect "$name" > /dev/null 2>&1; then
+    docker stop "$name" > /dev/null
+    docker rm "$name" > /dev/null
+fi
+
+docker run --detach --restart unless-stopped --publish 127.0.0.1:9101:9101 \
+    --pid host --read-only --cap-drop all --security-opt no-new-privileges \
     --mount type=bind,src=/dev,dst=/dev,readonly \
     --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
     --mount type=bind,src=/sys/fs/cgroup,dst=/sys/fs/cgroup,readonly \
