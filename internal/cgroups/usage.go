@@ -32,7 +32,7 @@ func AddUsage(total ToUsage, other ToUsage) {
 }
 
 func CalculateRootGroupUsage(netRootUsage ToUsage, current ToRootUsage, previous ToRootUsage) error {
-	// We do this manual racy calculations as the best effort: on my server a get the following results:
+	// We do this manual racy calculations as the best effort: on my server I get the following results:
 	//
 	// /sys/fs/cgroup# grep user_usec cpu.stat | cut -d ' ' -f 2
 	// 46283360000
