@@ -24,10 +24,12 @@ func parseNamedStat(propertyName string, reader io.Reader) (map[string]Stat, err
 
 	if err := util.ParseFile(reader, func(line string) error {
 		var nameRead bool
-		stat := make(map[string]int64)
 
-		for _, token := range strings.Split(line, " ") {
-			tokens := strings.Split(token, "=")
+		stat := make(map[string]int64)
+		lineTokens := strings.Split(line, " ")
+
+		for _, lineToken := range lineTokens {
+			tokens := strings.Split(lineToken, "=")
 
 			if len(tokens) == 1 && len(stat) == 0 {
 				name := tokens[0]
@@ -35,6 +37,13 @@ func parseNamedStat(propertyName string, reader io.Reader) (map[string]Stat, err
 
 				if _, ok := stats[name]; ok {
 					return fmt.Errorf("Got a duplicated %q name", name)
+				}
+
+				// io.stat may contain the following lines: "9:0 ". Don't know the real reason, but it might be an
+				// artefact of IO accounting specific (per inode accounting, page cache issues - see the docs for
+				// details). So just skip such lines.
+				if len(lineTokens) == 1 {
+					return nil
 				}
 
 				stats[name] = Stat{

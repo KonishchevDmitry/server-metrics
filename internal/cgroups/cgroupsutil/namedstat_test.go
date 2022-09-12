@@ -16,6 +16,7 @@ func TestParseNamedStat(t *testing.T) {
 		7:7 7:6 7:5 7:4 7:3 7:2 rbytes=14336 wbytes=0 rios=11 wios=0 dbytes=0 dios=0
 		7:1 rbytes=2741248 wbytes=0 rios=181 wios=0 dbytes=0 dios=0
 		7:0 rbytes=1093632 wbytes=0 rios=53 wios=0 dbytes=0 dios=0
+		6:0 
 	`)))
 	require.NoError(t, err)
 	require.Len(t, stats, 11)
@@ -23,4 +24,7 @@ func TestParseNamedStat(t *testing.T) {
 	require.Equal(t, int64(12477784064), stats["8:0"].stat["wbytes"])
 	require.Equal(t, int64(14336), stats["7:6"].stat["rbytes"])
 	require.Equal(t, int64(14336), stats["7:3"].stat["rbytes"])
+
+	_, ok := stats["6:0"]
+	require.False(t, ok)
 }
