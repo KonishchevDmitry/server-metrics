@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"io/ioutil"
+	"os"
 	"path"
 	"strconv"
 	"syscall"
@@ -77,7 +78,8 @@ func (g *Group) HasProcesses() (bool, bool, error) {
 }
 
 func (g *Group) ReadProperty(name string, reader func(file io.Reader) error) (bool, error) {
-	propertyPath := path.Join(g.Path(), name)
+	groupPath := g.Path()
+	propertyPath := path.Join(groupPath, name)
 
 	if err := util.ReadFile(propertyPath, reader); err == nil {
 		return true, nil
@@ -85,23 +87,15 @@ func (g *Group) ReadProperty(name string, reader func(file io.Reader) error) (bo
 		return false, err
 	}
 
-	// Property file is missing. Ensure that this is due to missing group and not due to group misconfiguration.
-
-	files, exists, err := g.list()
-	if err != nil || !exists {
-		return exists, err
-	}
-
-	// Group exists
-
-	for _, file := range files {
-		if !file.IsDir() && file.Name() == name {
-			// Property file also exists. Considering it as a race.
-			return false, nil
+	// Property file is missing. Before returning a misconfiguration error, check it for the following possible races:
+	// * Group is deleting
+	// * Group is creating and in process of configuration
+	return false, util.RetryRace(fmt.Errorf("%q is missing", propertyPath), func() (bool, error) {
+		if exists, err := isExist(groupPath); err != nil || !exists {
+			return !exists, err
 		}
-	}
-
-	return false, fmt.Errorf("%q is missing", propertyPath)
+		return isExist(propertyPath)
+	})
 }
 
 func (g *Group) list() ([]fs.FileInfo, bool, error) {
@@ -110,6 +104,14 @@ func (g *Group) list() ([]fs.FileInfo, bool, error) {
 		return nil, false, mapReadError(err)
 	}
 	return files, true, nil
+}
+
+func isExist(path string) (bool, error) {
+	if _, err := os.Stat(path); err == nil {
+		return true, nil
+	} else {
+		return false, mapReadError(err)
+	}
 }
 
 func mapReadError(err error) error {
