@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -30,7 +31,12 @@ func Start(logger *zap.SugaredLogger, collect func(ctx context.Context)) error {
 		prometheusHandler.ServeHTTP(writer, request)
 	})
 
-	return http.ListenAndServe(":9101", nil)
+	server := http.Server{
+		Addr:         ":9101",
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+	return server.ListenAndServe()
 }
 
 type lockedGatherer struct {

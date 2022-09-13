@@ -21,4 +21,4 @@ docker run --pull always --rm -v "$PWD:/data" "${go_cache_args[@]}" golang \
 
 docker run --pull always --rm -t \
     -v "$PWD:/app" -w /app "${go_cache_args[@]}" -e GOLANGCI_LINT_CACHE=/cache/lint \
-    golangci/golangci-lint golangci-lint run
+    golangci/golangci-lint golangci-lint run --timeout 5m

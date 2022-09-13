@@ -111,11 +111,10 @@ func (g *Group) list() ([]fs.FileInfo, bool, error) {
 }
 
 func isExist(path string) (bool, error) {
-	if _, err := os.Stat(path); err == nil {
-		return true, nil
-	} else {
+	if _, err := os.Stat(path); err != nil {
 		return false, mapReadError(err)
 	}
+	return true, nil
 }
 
 func mapReadError(err error) error {
