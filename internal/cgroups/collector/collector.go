@@ -3,6 +3,7 @@ package collector
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"go.uber.org/zap"
@@ -13,6 +14,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/io"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/memory"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
 type Collector struct {
@@ -77,6 +79,24 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 			hasProcesses, exists, err := group.HasProcesses()
 			if err != nil || !exists {
 				return exists, err
+			}
+
+			// /user.slice/user-XXX.slice/user@XXX.service is expected to be always empty, but when user session is
+			// being started systemd is placed there first and only then is being moved to init.scope
+			if classification.SystemdUserRoot && hasProcesses {
+				systemdUserRootErr := fmt.Errorf("%q group contains some processes, which is not expected", group.Name)
+
+				if err := util.RetryRace(systemdUserRootErr, func() (bool, error) {
+					hasProcesses, exists, err := group.HasProcesses()
+					return !hasProcesses || !exists, err
+				}); err != nil {
+					if !errors.Is(err, systemdUserRootErr) {
+						return false, err
+					}
+					logging.L(ctx).Errorf("%s.", err)
+				}
+
+				hasProcesses = false
 			}
 
 			needsCollection = hasProcesses

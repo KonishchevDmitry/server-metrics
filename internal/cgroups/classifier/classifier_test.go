@@ -48,6 +48,7 @@ func TestClassifier(t *testing.T) {
 
 		{"/user.slice", "", nil},
 		{"/user.slice/user-1000.slice", "dmitry", []string{"user@1000.service"}},
+		{"/user.slice/user-1000.slice/user@1000.service", "dmitry", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/init.scope", "dmitry/init", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice", "", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/dbus.socket", "dmitry/dbus.socket", nil},
@@ -61,6 +62,7 @@ func TestClassifier(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, testCase.service != "", ok)
 			require.Equal(t, testCase.service, classification.Service)
+			require.Equal(t, testCase.group == "/user.slice/user-1000.slice/user@1000.service", classification.SystemdUserRoot)
 
 			if testCase.totalExcluding == nil {
 				require.False(t, classification.TotalCollection)

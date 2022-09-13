@@ -16,6 +16,7 @@ import (
 
 type Classification struct {
 	Service              string
+	SystemdUserRoot      bool
 	TotalCollection      bool
 	TotalExcludeChildren []string
 }
@@ -80,15 +81,23 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 			return Classification{}, false, err
 		}
 
+		systemdUserServiceName := fmt.Sprintf("user@%d.service", uid)
+
 		// /user.slice/user-1000.slice
 		if match[1] == "" {
-			return system.classifyTotal(userName, fmt.Sprintf("user@%d.service", uid))
+			return system.classifyTotal(userName, systemdUserServiceName)
 		}
 
 		user := classifyContext{slice: "app", prefix: userName + "/"}
 
 		// /user.slice/user-1000.slice/*
 		if match[3] == "" {
+			if child == systemdUserServiceName {
+				return Classification{
+					Service:         userName,
+					SystemdUserRoot: true,
+				}, true, nil
+			}
 			return Classification{}, false, nil
 		}
 
