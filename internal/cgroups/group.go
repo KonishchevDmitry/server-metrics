@@ -28,6 +28,10 @@ func (g *Group) IsRoot() bool {
 	return g.Name == "/"
 }
 
+func (g *Group) IsExist() (bool, error) {
+	return isExist(g.Path())
+}
+
 func (g *Group) Path() string {
 	return path.Join(rootPath, g.Name)
 }

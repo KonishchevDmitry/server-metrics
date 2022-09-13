@@ -9,6 +9,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
 type Collector struct {
@@ -50,11 +51,10 @@ func (c *Collector) GC(ctx context.Context) {
 
 func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
 	var (
-		isRoot             bool
-		children           []*cgroups.Group
-		isExpectedChildren bool
-		exists             bool
-		err                error
+		isRoot   bool
+		children []*cgroups.Group
+		exists   bool
+		err      error
 	)
 
 	if group.IsRoot() {
@@ -64,7 +64,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 			return exists, err
 		}
 	} else if len(exclude) != 0 {
-		isRoot, isExpectedChildren = true, true
+		isRoot = true
 		for _, name := range exclude {
 			children = append(children, group.Child(name))
 		}
@@ -76,7 +76,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 	}
 
 	if isRoot {
-		usage, exists, err = c.collectRoot(group, usage, children, isExpectedChildren)
+		usage, exists, err = c.collectRoot(group, usage, children)
 		if err != nil || !exists {
 			return exists, err
 		}
@@ -121,27 +121,34 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 	return usage, true, nil
 }
 
-func (c *Collector) collectRoot(
-	group *cgroups.Group, totalUsage Usage, children []*cgroups.Group, isExpectedChildren bool,
-) (Usage, bool, error) {
+func (c *Collector) collectRoot(group *cgroups.Group, totalUsage Usage, children []*cgroups.Group) (Usage, bool, error) {
 	current := make(map[string]*rootUsage, len(totalUsage))
 	for device, usage := range totalUsage {
 		current[device] = &rootUsage{root: *usage}
 	}
 
 	for _, child := range children {
-		childUsage, exists, err := c.collect(child)
+		childUsage, childExists, err := c.collect(child)
 		if err != nil {
 			return Usage{}, false, err
-		} else if !exists {
-			if isExpectedChildren {
-				// Assuming a race due to user session closing
-				if _, exists, err := c.collect(group); err != nil || !exists {
-					return Usage{}, exists, err
-				}
-				return Usage{}, false, fmt.Errorf("%q is missing, but is expected to exist", child.Path())
-			} else {
+		}
+
+		if !childExists {
+			if group.IsRoot() {
 				return Usage{}, false, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
+			}
+
+			// It might be a race with user session opening/closing
+			if err := util.RetryRace(fmt.Errorf("%q is missing, but is expected to exist", child.Path()), func() (bool, error) {
+				if rootExists, err := group.IsExist(); err != nil || !rootExists {
+					return !rootExists, err
+				}
+
+				// Attention: Override the collection result
+				childUsage, childExists, err = c.collect(child)
+				return childExists, err
+			}); err != nil || !childExists {
+				return Usage{}, false, err
 			}
 		}
 

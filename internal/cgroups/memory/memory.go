@@ -14,6 +14,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
+	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
 var rssMetric = metrics.ServiceMetric("memory", "rss", "Anonymous and swap cache memory usage.")
@@ -45,7 +46,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 		return exists, err
 	}
 
-	var isRoot, isOptionalChildren bool
+	var isRoot bool
 	var children []*cgroups.Group
 
 	if group.IsRoot() {
@@ -55,14 +56,14 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 			return exists, err
 		}
 	} else if len(exclude) != 0 {
-		isRoot, isOptionalChildren = true, true
+		isRoot = true
 		for _, name := range exclude {
 			children = append(children, group.Child(name))
 		}
 	}
 
 	if isRoot {
-		usage, exists, err = c.collectRoot(usage, children, isOptionalChildren)
+		usage, exists, err = c.collectRoot(group, usage, children)
 		if err != nil || !exists {
 			return exists, err
 		}
@@ -114,18 +115,32 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 	return usage, true, nil
 }
 
-func (c *Collector) collectRoot(usage Usage, children []*cgroups.Group, isOptionalChildren bool) (Usage, bool, error) {
+func (c *Collector) collectRoot(group *cgroups.Group, usage Usage, children []*cgroups.Group) (Usage, bool, error) {
 	rootUsages := usage.ToUsage()
 
 	for _, child := range children {
-		childUsage, exists, err := c.collect(child)
+		childUsage, childExists, err := c.collect(child)
 		if err != nil {
-			return usage, false, err
-		} else if !exists {
-			if isOptionalChildren {
-				continue
+			return Usage{}, false, err
+		}
+
+		if !childExists {
+			if group.IsRoot() {
+				return Usage{}, false, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 			}
-			return usage, false, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
+
+			// It might be a race with user session opening/closing
+			if err := util.RetryRace(fmt.Errorf("%q is missing, but is expected to exist", child.Path()), func() (bool, error) {
+				if rootExists, err := group.IsExist(); err != nil || !rootExists {
+					return !rootExists, err
+				}
+
+				// Attention: Override the collection result
+				childUsage, childExists, err = c.collect(child)
+				return childExists, err
+			}); err != nil || !childExists {
+				return Usage{}, false, err
+			}
 		}
 
 		for index, childUsage := range childUsage.ToUsage() {
