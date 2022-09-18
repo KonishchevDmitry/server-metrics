@@ -63,7 +63,7 @@ func L(ctx context.Context) *zap.SugaredLogger {
 }
 
 func WithLogger(ctx context.Context, logger *zap.SugaredLogger) context.Context {
-	return context.WithValue(context.Background(), contextKey{}, logger)
+	return context.WithValue(ctx, contextKey{}, logger)
 }
 
 type encoder struct {
