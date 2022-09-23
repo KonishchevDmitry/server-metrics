@@ -8,21 +8,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	model "github.com/prometheus/client_model/go"
-	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
-
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
-func Start(logger *zap.SugaredLogger, collect func(ctx context.Context)) error {
+func Start(ctx context.Context, collect func(ctx context.Context)) error {
 	lock := semaphore.NewWeighted(1)
 	gatherer := lockedGatherer{lock: lock}
 	prometheusHandler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
 
 	http.HandleFunc("/metrics", func(writer http.ResponseWriter, request *http.Request) {
-		ctx := logging.WithLogger(request.Context(), logger)
-
-		if lock.Acquire(ctx, 1) != nil {
+		if lock.Acquire(request.Context(), 1) != nil {
 			return
 		}
 		collect(ctx)

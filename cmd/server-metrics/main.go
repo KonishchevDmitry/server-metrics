@@ -76,7 +76,7 @@ func execute(cmd *cobra.Command) error {
 		return nil
 	}
 
-	return server.Start(logger, collector.Collect)
+	return server.Start(ctx, collector.Collect)
 }
 
 func main() {
