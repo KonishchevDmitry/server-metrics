@@ -17,11 +17,15 @@ func Start(ctx context.Context, collect func(ctx context.Context)) error {
 	prometheusHandler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
 
 	http.HandleFunc("/metrics", func(writer http.ResponseWriter, request *http.Request) {
-		if lock.Acquire(request.Context(), 1) != nil {
+		cancellableContext := request.Context()
+
+		if lock.Acquire(cancellableContext, 1) != nil { //nolint:contextcheck
 			return
 		}
-		collect(ctx)
-		lock.Release(1)
+		func() {
+			defer lock.Release(1)
+			collect(ctx)
+		}()
 
 		prometheusHandler.ServeHTTP(writer, request)
 	})

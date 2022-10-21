@@ -12,9 +12,7 @@ go get -u -t ./...
 go mod tidy
 go test ./...
 
-docker run --pull always --rm -v "$PWD:/data" --entrypoint /usr/local/bin/gofmt \
-    cytopia/gofmt -s -w $src_dirs
-
+gofmt -s -w $src_dirs
 docker run --pull always --rm -v "$PWD:/data" "${go_cache_args[@]}" golang \
     bash -c 'go install -v github.com/daixiang0/gci@latest && cd /data && gci $0 "$@" > /dev/null' \
     write --section standard --section default --section "prefix($package)" $src_dirs
