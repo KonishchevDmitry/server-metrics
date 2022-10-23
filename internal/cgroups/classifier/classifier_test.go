@@ -44,6 +44,7 @@ func TestClassifier(t *testing.T) {
 		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", nil},
 		{"/system.slice/system-openvpn\\x2dserver.slice", "", nil},
 		{"/system.slice/system-openvpn\\x2dserver.slice/openvpn-server@proxy.service", "openvpn-server@proxy", nil},
+		{"/system.slice/systemd-udevd.service", "systemd-udevd", []string{}},
 		{"/system.slice/systemd-journald-dev-log.socket", "systemd-journald-dev-log.socket", nil},
 
 		{"/user.slice", "", nil},
@@ -55,6 +56,8 @@ func TestClassifier(t *testing.T) {
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/app-vm.slice", "", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/app-vm.slice/vm@linux.service", "dmitry/vm@linux", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/ssh-agent.service", "dmitry/ssh-agent", nil},
+		{"/user.slice/user-1000.slice/user@1000.service/session.slice", "", nil},
+		{"/user.slice/user-1000.slice/user@1000.service/session.slice/dbus.service", "dmitry/dbus", nil},
 	} {
 		testCase := testCase
 		t.Run(testCase.group, func(t *testing.T) {
