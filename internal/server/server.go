@@ -31,7 +31,7 @@ func Start(ctx context.Context, collect func(ctx context.Context)) error {
 	})
 
 	server := http.Server{
-		Addr:         ":9101",
+		Addr:         "127.0.0.1:9101",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

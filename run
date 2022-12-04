@@ -5,10 +5,10 @@ export DOCKER_CONTEXT=server
 
 DOCKER_BUILDKIT=1 docker build -t konishchev/server-metrics .
 
-docker run --rm --publish 127.0.0.1:9102:9101 \
-    --pid host --read-only --cap-drop all --security-opt no-new-privileges \
+docker run --rm --pid host --network host \
+    --read-only --cap-drop all --cap-add NET_ADMIN --security-opt no-new-privileges \
     --mount type=bind,src=/dev,dst=/dev,readonly \
     --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
     --mount type=bind,src=/sys/fs/cgroup,dst=/sys/fs/cgroup,readonly \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
-    konishchev/server-metrics "$@"
+    konishchev/server-metrics --devel "$@"

@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/nftables"
+
 	"github.com/spf13/cobra"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
@@ -63,20 +65,31 @@ func execute(cmd *cobra.Command) error {
 		}
 	}()
 
-	collector := collector.NewCollector(classifier.New(users.NewResolver(), dockerResolver))
+	cgroupsCollector := collector.NewCollector(classifier.New(users.NewResolver(), dockerResolver))
+
+	networkCollector, err := nftables.NewCollector()
+	if err != nil {
+		return err
+	}
+	defer networkCollector.Close(ctx)
+
+	collect := func(ctx context.Context) {
+		cgroupsCollector.Collect(ctx)
+		networkCollector.Collect(ctx)
+	}
 
 	if develMode {
 		logger.Info("Running in test mode.")
-		collector.Collect(ctx)
 
+		collect(ctx)
 		logger.Info("Sleeping...")
 		time.Sleep(5 * time.Second)
-		collector.Collect(ctx)
+		collect(ctx)
 
 		return nil
 	}
 
-	return server.Start(ctx, collector.Collect)
+	return server.Start(ctx, collect)
 }
 
 func main() {
