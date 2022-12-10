@@ -6,14 +6,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/nftables"
-
 	"github.com/spf13/cobra"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+	"github.com/KonishchevDmitry/server-metrics/internal/network"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
 )
@@ -67,7 +66,7 @@ func execute(cmd *cobra.Command) error {
 
 	cgroupsCollector := collector.NewCollector(classifier.New(users.NewResolver(), dockerResolver))
 
-	networkCollector, err := nftables.NewCollector(develMode)
+	networkCollector, err := network.NewCollector(develMode)
 	if err != nil {
 		return err
 	}

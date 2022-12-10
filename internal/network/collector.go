@@ -1,10 +1,9 @@
-package nftables
+package network
 
 import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 
 	"github.com/samber/mo"
 
@@ -15,15 +14,22 @@ import (
 )
 
 // FIXME(konishchev): Alter it
-const portScanThreshold = 10
+const localTCPPortScanThreshold = 100
+const localUDPPortScanThreshold = 100
+
+const remoteTCPPortScanThreshold = 5
+const remoteUDPPortScanThreshold = 10
+
+const typeLabelName = "type"
+const protocolLabelName = "protocol"
 
 var uniqueIPsMetric = metrics.NetworkMetric(
-	"new_connections", "ips", "Count of IP addresses with new connection attempts.")
+	"new_connections", "ips", "Count of IP addresses with new connection attempts.",
+	typeLabelName)
 
 var topIPMetric = metrics.NetworkMetric(
-	"port_connections", "top_ip", "Count of unique ports with new connections attempts for the top IP.")
-
-const protocolLabelName = "protocol"
+	"port_connections", "top_ip", "Count of unique ports with new connections attempts for the top IP.",
+	typeLabelName, protocolLabelName)
 
 var setSizeMetric = metrics.NetworkMetric(
 	"port_connections", "set_size", "Size of the sets storing unique ports with new connections statistics.",
@@ -71,9 +77,25 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 		newAddressFamily(4, net.IPv4len, nftables.TypeIPAddr),
 		newAddressFamily(6, net.IPv6len, nftables.TypeIP6Addr),
 	}
+
+	protocols := []protocolFamily{
+		makeProtocolFamily(
+			"TCP", func(stat *ipStat) *int { return &stat.tcp },
+			func(stat *addressFamilyStat) *topIPStat { return &stat.topTCP }),
+
+		makeProtocolFamily(
+			"UDP", func(stat *ipStat) *int { return &stat.udp },
+			func(stat *addressFamilyStat) *topIPStat { return &stat.topUDP }),
+	}
+
 	toDelete := make(map[*nftables.Set][]nftables.SetElement)
 
 	table, err := c.getTable()
+	if err != nil {
+		return nil, err
+	}
+
+	localNetworks, err := getLocalNetworks()
 	if err != nil {
 		return nil, err
 	}
@@ -88,10 +110,7 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 			return nil, err
 		}
 
-		for _, protocol := range []protocolFamily{
-			makeProtocolFamily("TCP", func(stat *ipStat) { stat.tcp++ }),
-			makeProtocolFamily("UDP", func(stat *ipStat) { stat.udp++ }),
-		} {
+		for _, protocol := range protocols {
 			setName := fmt.Sprintf("%s%d_ports_connections", protocol.label, family.version)
 
 			set, err := c.connection.GetSetByName(table, setName)
@@ -129,7 +148,8 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 					stat = &ipStat{}
 					family.stats[ip] = stat
 				}
-				protocol.inc(stat)
+
+				*protocol.getStat(stat)++
 			}
 		}
 	}
@@ -141,27 +161,64 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 	toBan := make(map[string]struct{})
 
 	for _, family := range addressFamilies {
-		var topStat ipStat
-		var topIP mo.Option[string]
+		localStat := addressFamilyStat{label: "local"}
+		remoteStat := addressFamilyStat{label: "remote"}
 
-		for ip, stat := range family.stats {
-			if stat.tcp >= portScanThreshold || stat.udp >= portScanThreshold {
+		for ipString, stat := range family.stats {
+			ip := net.ParseIP(ipString)
+			if ip == nil {
+				return nil, fmt.Errorf("Got an invalid IP: %q", ipString)
+			}
+
+			isLocalAddress, isLocalNetwork := classifyAddress(localNetworks, ip)
+			if isLocalAddress {
+				continue
+			}
+
+			familyStat, tcpThreshold, udpThreshold := &remoteStat, remoteTCPPortScanThreshold, remoteUDPPortScanThreshold
+			if isLocalNetwork {
+				familyStat, tcpThreshold, udpThreshold = &localStat, localTCPPortScanThreshold, localUDPPortScanThreshold
+			}
+
+			familyStat.uniqueIPs++
+			if stat.tcp >= tcpThreshold || stat.udp >= udpThreshold {
 				logging.L(ctx).Warnf("Port scan detected: %s: %s.", ip, stat)
-				toBan[ip] = struct{}{}
-			} else if stat.total() > topStat.total() {
-				topStat = *stat
-				topIP = mo.Some(ip)
+				toBan[ip.String()] = struct{}{}
+				continue
+			}
+
+			if top := &familyStat.topTCP; stat.tcp > top.stat.tcp {
+				top.stat = *stat
+				top.ip = mo.Some(ip)
+			}
+
+			if top := &familyStat.topUDP; stat.udp > top.stat.udp {
+				top.stat = *stat
+				top.ip = mo.Some(ip)
 			}
 		}
 
-		uniqIPs := len(family.stats)
-		logging.L(ctx).Debugf("Unique %s with new connection attempts: %d.", family.name, uniqIPs)
-		uniqueIPsMetric.With(metrics.NetworkLabels(family.label)).Set(float64(uniqIPs))
+		for _, stat := range []*addressFamilyStat{&localStat, &remoteStat} {
+			logging.L(ctx).Debugf("Unique %s %s with new connection attempts: %d.",
+				stat.label, family.name, stat.uniqueIPs)
 
-		if topIP, ok := topIP.Get(); ok {
-			logging.L(ctx).Debugf("Top %s with new connection attempts: %s: %s.", family.name, topIP, topStat)
+			labels := metrics.NetworkLabels(family.label)
+			labels[typeLabelName] = stat.label
+			uniqueIPsMetric.With(labels).Set(float64(stat.uniqueIPs))
+
+			for _, protocol := range protocols {
+				top := protocol.getTopStat(stat)
+				if ip, ok := top.ip.Get(); ok {
+					logging.L(ctx).Debugf("Top %s with new %s connection attempts: %s: %s.",
+						family.name, protocol.name, ip, top.stat)
+				}
+
+				labels := metrics.NetworkLabels(family.label)
+				labels[typeLabelName] = stat.label
+				labels[protocolLabelName] = protocol.label
+				topIPMetric.With(labels).Set(float64(*protocol.getStat(&top.stat)))
+			}
 		}
-		topIPMetric.With(metrics.NetworkLabels(family.label)).Set(float64(topStat.total()))
 	}
 
 	return toBan, nil
@@ -215,56 +272,4 @@ func (c *Collector) deleteBanned(ctx context.Context, sets map[*nftables.Set][]n
 	}
 
 	return nil
-}
-
-type addressFamily struct {
-	version int
-	name    string
-	label   string
-
-	size     uint32
-	dataType nftables.SetDatatype
-
-	stats map[string]*ipStat
-}
-
-func newAddressFamily(version int, size uint32, dataType nftables.SetDatatype) *addressFamily {
-	name := fmt.Sprintf("IPv%d", version)
-	return &addressFamily{
-		version: version,
-		name:    name,
-		label:   strings.ToLower(name),
-
-		size:     size,
-		dataType: dataType,
-
-		stats: make(map[string]*ipStat),
-	}
-}
-
-type protocolFamily struct {
-	name  string
-	label string
-	inc   func(stat *ipStat)
-}
-
-func makeProtocolFamily(name string, inc func(stat *ipStat)) protocolFamily {
-	return protocolFamily{
-		name:  name,
-		label: strings.ToLower(name),
-		inc:   inc,
-	}
-}
-
-type ipStat struct {
-	tcp int
-	udp int
-}
-
-func (s *ipStat) total() int {
-	return s.tcp + s.udp
-}
-
-func (s ipStat) String() string {
-	return fmt.Sprintf("%d TCP, %d UDP", s.tcp, s.udp)
 }
