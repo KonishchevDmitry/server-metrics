@@ -67,7 +67,7 @@ func execute(cmd *cobra.Command) error {
 
 	cgroupsCollector := collector.NewCollector(classifier.New(users.NewResolver(), dockerResolver))
 
-	networkCollector, err := nftables.NewCollector()
+	networkCollector, err := nftables.NewCollector(develMode)
 	if err != nil {
 		return err
 	}

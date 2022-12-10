@@ -79,7 +79,7 @@ func (e encoder) Clone() zapcore.Encoder {
 }
 
 func (e encoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
-	if entry.Level >= zapcore.WarnLevel {
+	if entry.Level >= zapcore.ErrorLevel {
 		errorsMetric.Inc()
 	}
 	return e.Encoder.EncodeEntry(entry, fields)
