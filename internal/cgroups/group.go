@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
-	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
@@ -102,8 +100,8 @@ func (g *Group) ReadProperty(name string, reader func(file io.Reader) error) (bo
 	})
 }
 
-func (g *Group) list() ([]fs.FileInfo, bool, error) {
-	files, err := ioutil.ReadDir(g.Path())
+func (g *Group) list() ([]os.DirEntry, bool, error) {
+	files, err := os.ReadDir(g.Path())
 	if err != nil {
 		return nil, false, mapReadError(err)
 	}

@@ -11,6 +11,8 @@ linters:
     - forcetypeassert
     - gochecknoglobals
     - gochecknoinits
+    - godot
+    - godox
     - gci
     - gocognit
     - gofumpt

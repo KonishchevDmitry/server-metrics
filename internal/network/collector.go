@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/google/nftables"
 	"github.com/samber/mo"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
-
-	"github.com/google/nftables"
 )
 
 // FIXME(konishchev): Alter it

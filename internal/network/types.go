@@ -5,9 +5,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/samber/mo"
-
 	"github.com/google/nftables"
+	"github.com/samber/mo"
 )
 
 type addressFamily struct {
