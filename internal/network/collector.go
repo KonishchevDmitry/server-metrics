@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/nftables"
 	"github.com/samber/mo"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
@@ -181,7 +183,8 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 
 			familyStat.uniqueIPs++
 			if stat.tcp >= tcpThreshold || stat.udp >= udpThreshold {
-				logging.L(ctx).Warnf("Port scan detected: %s: %s.", ip, stat)
+				logging.L(ctx).Warnf("%s port scan detected: %s: %s.",
+					cases.Title(language.English).String(familyStat.label), ip, stat)
 				toBan[ip.String()] = struct{}{}
 				continue
 			}
