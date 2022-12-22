@@ -5,6 +5,8 @@ import (
 	"net"
 	"strings"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/util"
+
 	"github.com/google/nftables"
 	"github.com/samber/mo"
 )
@@ -35,21 +37,29 @@ func newAddressFamily(version int, size uint32, dataType nftables.SetDatatype) *
 }
 
 type protocolFamily struct {
-	name       string
-	label      string
-	getStat    func(stat *ipStat) *int
+	name  string
+	label string
+
+	getPorts   func(stat *ipStat) *[]uint16
 	getTopStat func(stat *addressFamilyStat) *topIPStat
+	scorePort  scorePortFunc
+
+	portStat map[uint16]int
 }
 
-func makeProtocolFamily(
-	name string, getStat func(stat *ipStat) *int,
-	getTopStat func(stat *addressFamilyStat) *topIPStat,
-) protocolFamily {
-	return protocolFamily{
-		name:       name,
-		label:      strings.ToLower(name),
-		getStat:    getStat,
+func newProtocolFamily(
+	name string, getPorts func(stat *ipStat) *[]uint16, getTopStat func(stat *addressFamilyStat) *topIPStat,
+	scorePort scorePortFunc,
+) *protocolFamily {
+	return &protocolFamily{
+		name:  name,
+		label: strings.ToLower(name),
+
+		getPorts:   getPorts,
 		getTopStat: getTopStat,
+		scorePort:  scorePort,
+
+		portStat: make(map[uint16]int),
 	}
 }
 
@@ -66,10 +76,11 @@ type topIPStat struct {
 }
 
 type ipStat struct {
-	tcp int
-	udp int
+	tcp []uint16
+	udp []uint16
 }
 
 func (s ipStat) String() string {
-	return fmt.Sprintf("%d TCP, %d UDP", s.tcp, s.udp)
+	return fmt.Sprintf("%d TCP (%s), %d UDP (%s)",
+		len(s.tcp), util.FormatList(s.tcp, true), len(s.udp), util.FormatList(s.udp, true))
 }

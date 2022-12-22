@@ -15,6 +15,7 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.1
 	go.uber.org/zap v1.24.0
+	golang.org/x/exp v0.0.0-20221208152030-732eee02a75a
 	golang.org/x/sync v0.1.0
 	golang.org/x/text v0.5.0
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2

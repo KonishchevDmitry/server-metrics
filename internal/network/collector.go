@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net"
 
@@ -13,13 +14,6 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
-
-// FIXME(konishchev): Alter it
-const localTCPPortScanThreshold = 100
-const localUDPPortScanThreshold = 100
-
-const remoteTCPPortScanThreshold = 5
-const remoteUDPPortScanThreshold = 10
 
 const typeLabelName = "type"
 const protocolLabelName = "protocol"
@@ -79,17 +73,25 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 		newAddressFamily(6, net.IPv6len, nftables.TypeIP6Addr),
 	}
 
-	protocols := []protocolFamily{
-		makeProtocolFamily(
-			"TCP", func(stat *ipStat) *int { return &stat.tcp },
-			func(stat *addressFamilyStat) *topIPStat { return &stat.topTCP }),
+	protocols := []*protocolFamily{
+		newProtocolFamily(
+			"TCP", func(stat *ipStat) *[]uint16 { return &stat.tcp },
+			func(stat *addressFamilyStat) *topIPStat { return &stat.topTCP },
+			scoreTCPPort),
 
-		makeProtocolFamily(
-			"UDP", func(stat *ipStat) *int { return &stat.udp },
-			func(stat *addressFamilyStat) *topIPStat { return &stat.topUDP }),
+		newProtocolFamily(
+			"UDP", func(stat *ipStat) *[]uint16 { return &stat.udp },
+			func(stat *addressFamilyStat) *topIPStat { return &stat.topUDP },
+			scoreUDPPort),
 	}
 
 	toDelete := make(map[*nftables.Set][]nftables.SetElement)
+
+	portType := nftables.TypeInetService
+	if size := portType.Bytes; size != 2 {
+		return nil, fmt.Errorf("Got an unexpected port data type size: %d", size)
+	}
+	portTypePadding := 4 - portType.Bytes
 
 	table, err := c.getTable()
 	if err != nil {
@@ -106,9 +108,11 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 			return nil, fmt.Errorf("Got an unexpected %s data type size: %d", family.name, size)
 		}
 
-		elementType, err := nftables.ConcatSetType(family.dataType, nftables.TypeInetService)
+		elementType, err := nftables.ConcatSetType(family.dataType, portType)
 		if err != nil {
 			return nil, err
+		} else if size := elementType.Bytes; size != family.dataType.Bytes+portType.Bytes+portTypePadding {
+			return nil, fmt.Errorf("Got an unexpected %s data type size: %d", elementType.Name, size)
 		}
 
 		for _, protocol := range protocols {
@@ -137,12 +141,15 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 						"Got %q set element of an unexpected size: %d vs %d",
 						setName, size, elementType.Bytes)
 				}
-				ip := net.IP(element.Key[:family.size]).String()
 
+				ip := net.IP(element.Key[:family.size]).String()
 				if _, ok := banned[ip]; ok {
 					toDelete[set] = append(toDelete[set], element)
 					continue
 				}
+
+				port := binary.BigEndian.Uint16(element.Key[family.size:])
+				protocol.portStat[port]++
 
 				stat, ok := family.stats[ip]
 				if !ok {
@@ -150,7 +157,8 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 					family.stats[ip] = stat
 				}
 
-				*protocol.getStat(stat)++
+				ipPorts := protocol.getPorts(stat)
+				*ipPorts = append(*ipPorts, port)
 			}
 		}
 	}
@@ -182,19 +190,22 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 			}
 
 			familyStat.uniqueIPs++
-			if stat.tcp >= tcpThreshold || stat.udp >= udpThreshold {
-				logging.L(ctx).Warnf("%s port scan detected: %s: %s.",
-					cases.Title(language.English).String(familyStat.label), ip, stat)
+			tcpScore := scorePortsUsage(stat.tcp, isLocalNetwork, scoreTCPPort)
+			udpScore := scorePortsUsage(stat.udp, isLocalNetwork, scoreUDPPort)
+
+			if tcpScore > tcpThreshold || udpScore > udpThreshold {
+				logging.L(ctx).Warnf("%s port scan detected: %s: %s. TCP score: %d, UDP score: %d.",
+					cases.Title(language.English).String(familyStat.label), ip, stat, tcpScore, udpScore)
 				toBan[ip.String()] = struct{}{}
 				continue
 			}
 
-			if top := &familyStat.topTCP; stat.tcp > top.stat.tcp {
+			if top := &familyStat.topTCP; len(stat.tcp) > len(top.stat.tcp) {
 				top.stat = *stat
 				top.ip = mo.Some(ip)
 			}
 
-			if top := &familyStat.topUDP; stat.udp > top.stat.udp {
+			if top := &familyStat.topUDP; len(stat.udp) > len(top.stat.udp) {
 				top.stat = *stat
 				top.ip = mo.Some(ip)
 			}
@@ -210,16 +221,34 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 
 			for _, protocol := range protocols {
 				top := protocol.getTopStat(stat)
+
 				if ip, ok := top.ip.Get(); ok {
-					logging.L(ctx).Debugf("Top %s with new %s connection attempts: %s: %s.",
-						family.name, protocol.name, ip, top.stat)
+					ports := *protocol.getPorts(&top.stat)
+					score := scorePortsUsage(ports, stat == &localStat, protocol.scorePort)
+					logging.L(ctx).Debugf("Top %s %s with new %s connection attempts: %s: %s. Score: %d.",
+						stat.label, family.name, protocol.name, ip, top.stat, score)
 				}
 
 				labels := metrics.NetworkLabels(family.label)
 				labels[typeLabelName] = stat.label
 				labels[protocolLabelName] = protocol.label
-				topIPMetric.With(labels).Set(float64(*protocol.getStat(&top.stat)))
+				topIPMetric.With(labels).Set(float64(len(*protocol.getPorts(&top.stat))))
 			}
+		}
+	}
+
+	for _, protocol := range protocols {
+		var topPort mo.Option[uint16]
+		var topCount int
+
+		for port, count := range protocol.portStat {
+			if count > topCount && protocol.scorePort(port, false) == unknownPortScore {
+				topPort, topCount = mo.Some(port), count
+			}
+		}
+
+		if port, ok := topPort.Get(); ok {
+			logging.L(ctx).Debugf("Most used %s port: %d (%d times).", protocol.name, port, topCount)
 		}
 	}
 
