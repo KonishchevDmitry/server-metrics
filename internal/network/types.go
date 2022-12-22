@@ -5,10 +5,10 @@ import (
 	"net"
 	"strings"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/util"
-
 	"github.com/google/nftables"
 	"github.com/samber/mo"
+
+	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
 type addressFamily struct {

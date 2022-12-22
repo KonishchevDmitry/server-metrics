@@ -11,6 +11,7 @@ linters:
     - forcetypeassert
     - gochecknoglobals
     - gochecknoinits
+    - gocyclo
     - godot
     - godox
     - gci
@@ -20,6 +21,7 @@ linters:
     - ifshort
     - ireturn
     - lll
+    - maintidx
     - nestif
     - nlreturn
     - nonamedreturns
