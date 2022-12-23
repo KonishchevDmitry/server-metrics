@@ -22,6 +22,10 @@ var uniqueIPsMetric = metrics.NetworkMetric(
 	"new_connections", "ips", "Count of IP addresses with new connection attempts.",
 	typeLabelName)
 
+var connectionsMetric = metrics.NetworkHistogram(
+	"new_connections", "ports", "Count of unique ports with new connections attempts per IP.",
+	[]float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 30}, typeLabelName, protocolLabelName)
+
 var topIPMetric = metrics.NetworkMetric(
 	"port_connections", "top_ip", "Count of unique ports with new connections attempts for the top IP.",
 	typeLabelName, protocolLabelName)
@@ -56,6 +60,8 @@ func (c *Collector) Close(ctx context.Context) {
 }
 
 func (c *Collector) Collect(ctx context.Context) {
+	connectionsMetric.Reset()
+
 	toBan, err := c.collect(ctx, c.banned)
 	if err != nil {
 		logging.L(ctx).Errorf("Failed to collect network metrics: %s.", err)
@@ -200,14 +206,18 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 				continue
 			}
 
-			if top := &familyStat.topTCP; len(stat.tcp) > len(top.stat.tcp) {
-				top.stat = *stat
-				top.ip = mo.Some(ip)
-			}
+			for _, protocol := range protocols {
+				ports := len(*protocol.getPorts(stat))
 
-			if top := &familyStat.topUDP; len(stat.udp) > len(top.stat.udp) {
-				top.stat = *stat
-				top.ip = mo.Some(ip)
+				labels := metrics.NetworkLabels(family.label)
+				labels[typeLabelName] = familyStat.label
+				labels[protocolLabelName] = protocol.label
+				connectionsMetric.With(labels).Observe(float64(ports))
+
+				if top := protocol.getTopStat(familyStat); ports > len(*protocol.getPorts(&top.stat)) {
+					top.stat = *stat
+					top.ip = mo.Some(ip)
+				}
 			}
 		}
 

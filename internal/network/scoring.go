@@ -1,10 +1,10 @@
 package network
 
-// Thresholds are bigger for UDP, because there are chances of false positives for forwarded packets due to conntrack
+// Threshold is bigger for UDP, because there are chances of false positives for forwarded packets due to conntrack
 // expiration, which is not the case for TCP.
 
 const localTCPPortScanThreshold = 10
-const localUDPPortScanThreshold = 20
+const localUDPPortScanThreshold = 10
 
 const remoteTCPPortScanThreshold = 5
 const remoteUDPPortScanThreshold = 10
@@ -52,12 +52,16 @@ func scoreTCPPort(port uint16, local bool) int {
 		993,        // IMAP + TLS
 		995,        // POP3 + TLS
 		1433,       // MSSQL
+		2376,       // Docker REST API
 		3128,       // Proxy
 		3306,       // MySQL
 		4899,       // Radmin
+		5432,       // PostgreSQL
 		5900, 5901, // VNC
-		6881,       // BitTorrent trackers/clients
-		8080, 8443: // Devel ports
+		6443,                         // Kubernetes API
+		6881,                         // BitTorrent trackers/clients
+		8000, 8008, 8080, 8443, 8888, // Devel ports
+		10250: // Kubelet API
 		return portScanScore
 
 	default:
