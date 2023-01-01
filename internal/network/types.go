@@ -1,8 +1,10 @@
 package network
 
 import (
+	"bytes"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 
 	"github.com/google/nftables"
@@ -20,6 +22,13 @@ type addressFamily struct {
 	dataType nftables.SetDatatype
 
 	stats map[string]*ipStat
+}
+
+func getAddressFamilies() []*addressFamily {
+	return []*addressFamily{
+		newAddressFamily(4, net.IPv4len, nftables.TypeIPAddr),
+		newAddressFamily(6, net.IPv6len, nftables.TypeIP6Addr),
+	}
 }
 
 func newAddressFamily(version int, size uint32, dataType nftables.SetDatatype) *addressFamily {
@@ -45,6 +54,20 @@ type protocolFamily struct {
 	scorePort  scorePortFunc
 
 	portStat map[uint16]int
+}
+
+func getProtocolFamilies() []*protocolFamily {
+	return []*protocolFamily{
+		newProtocolFamily(
+			"TCP", func(stat *ipStat) *[]uint16 { return &stat.tcp },
+			func(stat *addressFamilyStat) *topIPStat { return &stat.topTCP },
+			scoreTCPPort),
+
+		newProtocolFamily(
+			"UDP", func(stat *ipStat) *[]uint16 { return &stat.udp },
+			func(stat *addressFamilyStat) *topIPStat { return &stat.topUDP },
+			scoreUDPPort),
+	}
 }
 
 func newProtocolFamily(
@@ -83,4 +106,66 @@ type ipStat struct {
 func (s ipStat) String() string {
 	return fmt.Sprintf("%d TCP (%s), %d UDP (%s)",
 		len(s.tcp), util.FormatList(s.tcp, true), len(s.udp), util.FormatList(s.udp, true))
+}
+
+type forwardIPStat struct {
+	ip    string
+	tcp   map[uint16]int
+	udp   map[uint16]int
+	total int
+}
+
+func newForwardIPStat(ip string) *forwardIPStat {
+	return &forwardIPStat{
+		ip:  ip,
+		tcp: make(map[uint16]int),
+		udp: make(map[uint16]int),
+	}
+}
+
+func (s *forwardIPStat) String() string {
+	var buf bytes.Buffer
+
+	_, _ = fmt.Fprintf(&buf, "%s: ", s.ip)
+	formatPortStat(&buf, "TCP", s.tcp)
+	buf.WriteString(", ")
+	formatPortStat(&buf, "UDP", s.udp)
+
+	return buf.String()
+}
+
+func formatPortStat(buf *bytes.Buffer, name string, ports map[uint16]int) {
+	type portStat struct {
+		port  uint16
+		count int
+	}
+
+	var total int
+	stats := make([]portStat, 0, len(ports))
+
+	for port, count := range ports {
+		stats = append(stats, portStat{
+			port:  port,
+			count: count,
+		})
+		total += count
+	}
+	sort.Slice(stats, func(i, j int) bool {
+		return stats[i].count > stats[j].count
+	})
+
+	_, _ = fmt.Fprintf(buf, "%d %s", total, name)
+
+	if len(stats) != 0 {
+		buf.WriteString(" (")
+
+		for index, stat := range stats {
+			if index != 0 {
+				buf.WriteString(", ")
+			}
+			_, _ = fmt.Fprintf(buf, "%dx%d", stat.count, stat.port)
+		}
+
+		buf.WriteByte(')')
+	}
 }

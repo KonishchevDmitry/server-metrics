@@ -5,9 +5,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sort"
 
 	"github.com/google/nftables"
 	"github.com/samber/mo"
+	"go.uber.org/zap"
+	"golang.org/x/sys/unix"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
@@ -18,21 +21,29 @@ import (
 const typeLabelName = "type"
 const protocolLabelName = "protocol"
 
-var uniqueIPsMetric = metrics.NetworkMetric(
-	"new_connections", "ips", "Count of IP addresses with new connection attempts.",
-	typeLabelName)
+var uniqueInputIPsMetric = metrics.NetworkMetric(
+	"new_connections", "ips", "Count of IP addresses with new input connection attempts.",
+	metrics.FamilyLabel, typeLabelName)
 
-var connectionsMetric = metrics.NetworkHistogram(
-	"new_connections", "ports", "Count of unique ports with new connections attempts per IP.",
-	[]float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 30}, typeLabelName, protocolLabelName)
+var inputConnectionsMetric = metrics.NetworkHistogram(
+	"new_connections", "ports", "Count of unique ports with new input connections attempts per IP.",
+	[]float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 30},
+	metrics.FamilyLabel, typeLabelName, protocolLabelName)
 
-var topIPMetric = metrics.NetworkMetric(
-	"port_connections", "top_ip", "Count of unique ports with new connections attempts for the top IP.",
-	typeLabelName, protocolLabelName)
+var topInputIPMetric = metrics.NetworkMetric(
+	"port_connections", "top_ip", "Count of unique ports with new input connections attempts for the top IP.",
+	metrics.FamilyLabel, typeLabelName, protocolLabelName)
 
-var setSizeMetric = metrics.NetworkMetric(
-	"port_connections", "set_size", "Size of the sets storing unique ports with new connections statistics.",
-	protocolLabelName)
+var topForwardIPMetric = metrics.NetworkMetric(
+	"forward_connections", "top_ip", "Count of unique ports with new forward connections attempts for the top IP.")
+
+var inputSetSizeMetric = metrics.NetworkMetric(
+	"port_connections", "set_size", "Size of the sets storing unique ports with new input connections statistics.",
+	metrics.FamilyLabel, protocolLabelName)
+
+var forwardSetSizeMetric = metrics.NetworkMetric(
+	"forward_connections", "set_size", "Size of the sets storing unique ports with new forward connections statistics.",
+	metrics.FamilyLabel)
 
 type Collector struct {
 	connection *nftables.Conn
@@ -60,9 +71,12 @@ func (c *Collector) Close(ctx context.Context) {
 }
 
 func (c *Collector) Collect(ctx context.Context) {
-	connectionsMetric.Reset()
+	inputConnectionsMetric.Reset()
 
-	toBan, err := c.collect(ctx, c.banned)
+	toBan, err := c.collectInputIPs(ctx, c.banned)
+	if err == nil {
+		err = c.collectForwardIPs(ctx)
+	}
 	if err != nil {
 		logging.L(ctx).Errorf("Failed to collect network metrics: %s.", err)
 	}
@@ -73,23 +87,11 @@ func (c *Collector) Collect(ctx context.Context) {
 	}
 }
 
-func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (map[string]struct{}, error) {
-	addressFamilies := []*addressFamily{
-		newAddressFamily(4, net.IPv4len, nftables.TypeIPAddr),
-		newAddressFamily(6, net.IPv6len, nftables.TypeIP6Addr),
-	}
+func (c *Collector) collectInputIPs(ctx context.Context, banned map[string]struct{}) (map[string]struct{}, error) {
+	logging.L(ctx).Debugf("Collecting input IPs:")
 
-	protocols := []*protocolFamily{
-		newProtocolFamily(
-			"TCP", func(stat *ipStat) *[]uint16 { return &stat.tcp },
-			func(stat *addressFamilyStat) *topIPStat { return &stat.topTCP },
-			scoreTCPPort),
-
-		newProtocolFamily(
-			"UDP", func(stat *ipStat) *[]uint16 { return &stat.udp },
-			func(stat *addressFamilyStat) *topIPStat { return &stat.topUDP },
-			scoreUDPPort),
-	}
+	addressFamilies := getAddressFamilies()
+	protocols := getProtocolFamilies()
 
 	toDelete := make(map[*nftables.Set][]nftables.SetElement)
 
@@ -98,11 +100,6 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 		return nil, fmt.Errorf("Got an unexpected port data type size: %d", size)
 	}
 	portTypePadding := 4 - portType.Bytes
-
-	table, err := c.getTable()
-	if err != nil {
-		return nil, err
-	}
 
 	localNetworks, err := getLocalNetworks()
 	if err != nil {
@@ -124,22 +121,17 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 		for _, protocol := range protocols {
 			setName := fmt.Sprintf("%s%d_ports_connections", protocol.label, family.version)
 
-			set, err := c.connection.GetSetByName(table, setName)
+			set, elements, err := c.getSet(setName)
 			if err != nil {
-				return nil, fmt.Errorf("Failed to get %q set: %w", setName, err)
-			}
-
-			elements, err := c.connection.GetSetElements(set)
-			if err != nil {
-				return nil, fmt.Errorf("Failed to list %q set: %w", setName, err)
+				return nil, err
 			}
 
 			setSize := len(elements)
-			logging.L(ctx).Debugf("%s %s ports connections set size: %d.", family.name, protocol.name, setSize)
+			logging.L(ctx).Debugf("* %s %s ports connections set size: %d.", family.name, protocol.name, setSize)
 
 			setLabels := metrics.NetworkLabels(family.label)
 			setLabels[protocolLabelName] = protocol.label
-			setSizeMetric.With(setLabels).Set(float64(setSize))
+			inputSetSizeMetric.With(setLabels).Set(float64(setSize))
 
 			for _, element := range elements {
 				if size := len(element.Key); size != int(elementType.Bytes) {
@@ -212,7 +204,7 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 				labels := metrics.NetworkLabels(family.label)
 				labels[typeLabelName] = familyStat.label
 				labels[protocolLabelName] = protocol.label
-				connectionsMetric.With(labels).Observe(float64(ports))
+				inputConnectionsMetric.With(labels).Observe(float64(ports))
 
 				if top := protocol.getTopStat(familyStat); ports > len(*protocol.getPorts(&top.stat)) {
 					top.stat = *stat
@@ -222,12 +214,12 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 		}
 
 		for _, stat := range []*addressFamilyStat{&localStat, &remoteStat} {
-			logging.L(ctx).Debugf("Unique %s %s with new connection attempts: %d.",
+			logging.L(ctx).Debugf("* Unique %s %s with new connection attempts: %d.",
 				stat.label, family.name, stat.uniqueIPs)
 
 			labels := metrics.NetworkLabels(family.label)
 			labels[typeLabelName] = stat.label
-			uniqueIPsMetric.With(labels).Set(float64(stat.uniqueIPs))
+			uniqueInputIPsMetric.With(labels).Set(float64(stat.uniqueIPs))
 
 			for _, protocol := range protocols {
 				top := protocol.getTopStat(stat)
@@ -235,34 +227,150 @@ func (c *Collector) collect(ctx context.Context, banned map[string]struct{}) (ma
 				if ip, ok := top.ip.Get(); ok {
 					ports := *protocol.getPorts(&top.stat)
 					score := scorePortsUsage(ports, stat == &localStat, protocol.scorePort)
-					logging.L(ctx).Debugf("Top %s %s with new %s connection attempts: %s: %s. Score: %d.",
+					logging.L(ctx).Debugf("* Top %s %s with new %s connection attempts: %s: %s. Score: %d.",
 						stat.label, family.name, protocol.name, ip, top.stat, score)
 				}
 
 				labels := metrics.NetworkLabels(family.label)
 				labels[typeLabelName] = stat.label
 				labels[protocolLabelName] = protocol.label
-				topIPMetric.With(labels).Set(float64(len(*protocol.getPorts(&top.stat))))
+				topInputIPMetric.With(labels).Set(float64(len(*protocol.getPorts(&top.stat))))
 			}
 		}
 	}
 
-	for _, protocol := range protocols {
-		var topPort mo.Option[uint16]
-		var topCount int
+	if logging.L(ctx).Level() <= zap.DebugLevel {
+		for _, protocol := range protocols {
+			var topPort mo.Option[uint16]
+			var topCount int
 
-		for port, count := range protocol.portStat {
-			if count > topCount && protocol.scorePort(port, false) == unknownPortScore {
-				topPort, topCount = mo.Some(port), count
+			for port, count := range protocol.portStat {
+				if count > topCount && protocol.scorePort(port, false) == unknownPortScore {
+					topPort, topCount = mo.Some(port), count
+				}
 			}
-		}
 
-		if port, ok := topPort.Get(); ok {
-			logging.L(ctx).Debugf("Most used %s port: %d (%d times).", protocol.name, port, topCount)
+			if port, ok := topPort.Get(); ok {
+				logging.L(ctx).Debugf("* Most used %s port: %d (%d times).", protocol.name, port, topCount)
+			}
 		}
 	}
 
 	return toBan, nil
+}
+
+func (c *Collector) collectForwardIPs(ctx context.Context) error {
+	logging.L(ctx).Debugf("Collecting forward IPs:")
+
+	protocolType := nftables.TypeInetProto
+	if size := protocolType.Bytes; size != 1 {
+		return fmt.Errorf("Got an unexpected protocol data type size: %d", size)
+	}
+	protocolTypePadding := 4 - protocolType.Bytes
+
+	portType := nftables.TypeInetService
+	if size := portType.Bytes; size != 2 {
+		return fmt.Errorf("Got an unexpected port data type size: %d", size)
+	}
+	portTypePadding := 4 - portType.Bytes
+
+	stats := make(map[string]*forwardIPStat)
+
+	for _, family := range getAddressFamilies() {
+		expectedSize := family.dataType.Bytes + family.dataType.Bytes + protocolType.Bytes + protocolTypePadding + portType.Bytes + portTypePadding
+
+		if size := family.dataType.Bytes; size != family.size {
+			return fmt.Errorf("Got an unexpected %s data type size: %d", family.name, size)
+		}
+
+		elementType, err := nftables.ConcatSetType(family.dataType, family.dataType, protocolType, portType)
+		if err != nil {
+			return err
+		} else if size := elementType.Bytes; size != expectedSize {
+			return fmt.Errorf("Got an unexpected %s data type size: %d", elementType.Name, size)
+		}
+
+		setName := fmt.Sprintf("ip%d_forward_connections", family.version)
+
+		_, elements, err := c.getSet(setName)
+		if err != nil {
+			return err
+		}
+
+		setSize := len(elements)
+		forwardSetSizeMetric.With(metrics.NetworkLabels(family.label)).Set(float64(setSize))
+		logging.L(ctx).Debugf("* %s forward connections set size: %d.", family.name, setSize)
+
+		for _, element := range elements {
+			element := element
+
+			if size := len(element.Key); size != int(elementType.Bytes) {
+				return fmt.Errorf(
+					"Got %q set element of an unexpected size: %d vs %d",
+					setName, size, elementType.Bytes)
+			}
+
+			var offset uint32
+			getData := func(size uint32) []byte {
+				data := element.Key[offset : offset+size]
+				offset += size
+				return data
+			}
+
+			ip := net.IP(getData(family.size)).String()
+			_ = getData(family.size)
+
+			protocol := getData(protocolType.Bytes + protocolTypePadding)[0]
+			port := binary.BigEndian.Uint16(getData(portType.Bytes))
+
+			stat, ok := stats[ip]
+			if !ok {
+				stat = newForwardIPStat(ip)
+				stats[ip] = stat
+			}
+
+			switch protocol {
+			case unix.IPPROTO_TCP:
+				stat.tcp[port]++
+			case unix.IPPROTO_UDP:
+				stat.udp[port]++
+			default:
+				return fmt.Errorf("Got an unexpected protocol from %q set: %d", setName, protocol)
+			}
+
+			stat.total++
+		}
+	}
+
+	var all []*forwardIPStat
+	var top mo.Option[*forwardIPStat]
+	debugMode := logging.L(ctx).Level() <= zap.DebugLevel
+
+	for _, stat := range stats {
+		if topStat, ok := top.Get(); !ok || topStat.total < stat.total {
+			top = mo.Some(stat)
+		}
+
+		if debugMode {
+			all = append(all, stat)
+		}
+	}
+
+	if topIPStat, ok := top.Get(); ok {
+		topForwardIPMetric.WithLabelValues().Set(float64(topIPStat.total))
+	}
+
+	if debugMode {
+		sort.Slice(all, func(i, j int) bool {
+			return all[i].total > all[j].total
+		})
+
+		for _, stat := range all {
+			logging.L(ctx).Debugf("* %s", stat)
+		}
+	}
+
+	return nil
 }
 
 func (c *Collector) getTable() (*nftables.Table, error) {
@@ -284,6 +392,25 @@ func (c *Collector) getTable() (*nftables.Table, error) {
 	}
 
 	return nil, fmt.Errorf("Unable to find %q table", filterTableName)
+}
+
+func (c *Collector) getSet(name string) (*nftables.Set, []nftables.SetElement, error) {
+	table, err := c.getTable()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	set, err := c.connection.GetSetByName(table, name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to get %q set: %w", name, err)
+	}
+
+	elements, err := c.connection.GetSetElements(set)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to list %q set: %w", name, err)
+	}
+
+	return set, elements, nil
 }
 
 func (c *Collector) deleteBanned(ctx context.Context, sets map[*nftables.Set][]nftables.SetElement) (retErr error) {

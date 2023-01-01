@@ -25,6 +25,7 @@ linters:
     - nestif
     - nlreturn
     - nonamedreturns
+    - nosnakecase
     - paralleltest
     - testpackage
     - varnamelen
