@@ -4,10 +4,11 @@ package network
 // expiration, which is not the case for TCP.
 
 const localTCPPortScanThreshold = 10
-const localUDPPortScanThreshold = 10
-
 const remoteTCPPortScanThreshold = 5
-const remoteUDPPortScanThreshold = 10
+
+// FIXME(konishchev): Conntrack is too unreliable for UDP. Drop it?
+const localUDPPortScanThreshold = 1000000000
+const remoteUDPPortScanThreshold = 1000000000
 
 const publicPortScore = 0
 const unknownPortScore = 1
