@@ -126,7 +126,7 @@ func newForwardIPStat(ip string) *forwardIPStat {
 func (s *forwardIPStat) String() string {
 	var buf bytes.Buffer
 
-	_, _ = fmt.Fprintf(&buf, "%s: ", s.ip)
+	_, _ = fmt.Fprintf(&buf, "%s (%d IP+port pairs): ", s.ip, s.total)
 	formatPortStat(&buf, "TCP", s.tcp)
 	buf.WriteString(", ")
 	formatPortStat(&buf, "UDP", s.udp)
