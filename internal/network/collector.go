@@ -45,6 +45,12 @@ var forwardSetSizeMetric = metrics.NetworkMetric(
 	"forward_connections", "set_size", "Size of the sets storing unique ports with new forward connections statistics.",
 	metrics.FamilyLabel)
 
+var allMetrics = []metrics.GenericMetric{
+	uniqueInputIPsMetric, inputConnectionsMetric,
+	topInputIPMetric, topForwardIPMetric,
+	inputSetSizeMetric, forwardSetSizeMetric,
+}
+
 type Collector struct {
 	connection *nftables.Conn
 	table      mo.Option[*nftables.Table]
@@ -71,7 +77,9 @@ func (c *Collector) Close(ctx context.Context) {
 }
 
 func (c *Collector) Collect(ctx context.Context) {
-	inputConnectionsMetric.Reset()
+	for _, metric := range allMetrics {
+		metric.Reset()
+	}
 
 	toBan, err := c.collectInputIPs(ctx, c.banned)
 	if err == nil {

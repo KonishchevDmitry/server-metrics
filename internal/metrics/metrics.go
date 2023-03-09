@@ -6,6 +6,10 @@ const Namespace = "server"
 const FamilyLabel = "family"
 const serviceLabel = "service"
 
+type GenericMetric interface {
+	Reset()
+}
+
 func Metric(namespace string, subsystem string, name string, help string, labels ...string) *prometheus.GaugeVec {
 	metric := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: Namespace + "_" + namespace,
