@@ -424,27 +424,32 @@ func (c *Collector) getSet(name string) (*nftables.Set, []nftables.SetElement, e
 func (c *Collector) deleteBanned(ctx context.Context, sets map[*nftables.Set][]nftables.SetElement) (retErr error) {
 	var deletedElements int
 	defer func() {
-		if deletedElements == 0 {
-			return
+		if deletedElements != 0 {
+			logging.L(ctx).Infof("%d elements have been deleted from ports connections tracking sets.", deletedElements)
 		}
-
-		if err := c.connection.Flush(); err != nil {
-			if retErr == nil {
-				retErr = fmt.Errorf(
-					"Unable to delete %d elements from ports connections tracking sets: %w",
-					deletedElements, err)
-			}
-			return
-		}
-
-		logging.L(ctx).Infof("%d elements have been deleted from ports connections tracking sets.", deletedElements)
 	}()
 
+	// The maximum netlink message size is limited by socket send buffer, so don't delete too much in one call
+	const batchSize = 1000
+
 	for set, elements := range sets {
-		if err := c.connection.SetDeleteElements(set, elements); err != nil {
-			return fmt.Errorf("Unable to delete %d elements from %q set: %w", len(elements), set.Name, err)
+		for len(elements) != 0 {
+			count := batchSize
+			if elements := len(elements); count > elements {
+				count = elements
+			}
+
+			err := c.connection.SetDeleteElements(set, elements[:count])
+			if err == nil {
+				err = c.connection.Flush()
+			}
+			if err != nil {
+				return fmt.Errorf("Unable to delete %d elements from %q set: %w", count, set.Name, err)
+			}
+
+			deletedElements += count
+			elements = elements[count:]
 		}
-		deletedElements += len(elements)
 	}
 
 	return nil
