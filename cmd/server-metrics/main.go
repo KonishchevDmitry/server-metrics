@@ -6,10 +6,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
-	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
+	cgroupclassifier "github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
+	cgroupscollector "github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/network"
@@ -64,7 +65,11 @@ func execute(cmd *cobra.Command) error {
 		}
 	}()
 
-	cgroupsCollector := collector.NewCollector(classifier.New(users.NewResolver(), dockerResolver))
+	cgroupClassifier := cgroupclassifier.New(users.NewResolver(), dockerResolver)
+	cgroupsCollector := cgroupscollector.NewCollector(logger, cgroupClassifier)
+
+	// FIXME(konishchev): Use custom registry with namespace?
+	prometheus.Register(cgroupsCollector)
 
 	networkCollector, err := network.NewCollector(develMode)
 	if err != nil {
@@ -73,12 +78,25 @@ func execute(cmd *cobra.Command) error {
 	defer networkCollector.Close(ctx)
 
 	collect := func(ctx context.Context) {
-		cgroupsCollector.Collect(ctx)
+		if develMode {
+			metrics := make(chan prometheus.Metric)
+			defer close(metrics)
+
+			go func() {
+				for {
+					if _, ok := <-metrics; !ok {
+						break
+					}
+				}
+			}()
+
+			cgroupsCollector.Collect(metrics)
+		}
 		networkCollector.Collect(ctx)
 	}
 
 	if develMode {
-		logger.Info("Running in test mode.")
+		logger.Info("Running in devel mode.")
 
 		collect(ctx)
 		logger.Info("Sleeping...")

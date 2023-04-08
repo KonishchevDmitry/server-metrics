@@ -26,17 +26,22 @@ func NewCollector() *Collector {
 	}
 }
 
-func (c *Collector) Reset() {
+func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
+	descs <- readsMetric
+	descs <- writesMetric
+
+	descs <- readBytesMetric
+	descs <- writtenBytesMetric
+}
+
+func (c *Collector) Pre() {
 	c.resolver.reset()
 	for _, state := range c.roots {
 		state.collected = false
 	}
-	for _, metric := range []*prometheus.GaugeVec{readsMetric, writesMetric, readBytesMetric, writtenBytesMetric} {
-		metric.Reset()
-	}
 }
 
-func (c *Collector) GC(ctx context.Context) {
+func (c *Collector) Post(ctx context.Context) {
 	for name, state := range c.roots {
 		if !state.collected {
 			if cgroups.NewGroup(name).IsRoot() {
@@ -49,7 +54,9 @@ func (c *Collector) GC(ctx context.Context) {
 	}
 }
 
-func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
+func (c *Collector) Collect(
+	ctx context.Context, service string, group *cgroups.Group, exclude []string, metrics chan<- prometheus.Metric,
+) (bool, error) {
 	var (
 		isRoot   bool
 		children []*cgroups.Group
@@ -82,7 +89,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 		}
 	}
 
-	c.record(ctx, service, usage)
+	c.record(ctx, service, usage, metrics)
 	return true, nil
 }
 
@@ -196,7 +203,7 @@ func (c *Collector) collectRoot(group *cgroups.Group, totalUsage Usage, children
 	return state.netUsage, true, nil
 }
 
-func (c *Collector) record(ctx context.Context, service string, usage Usage) {
+func (c *Collector) record(ctx context.Context, service string, usage Usage, metrics chan<- prometheus.Metric) {
 	for device, stat := range usage {
 		device = c.resolver.getDeviceName(ctx, device)
 
@@ -204,13 +211,11 @@ func (c *Collector) record(ctx context.Context, service string, usage Usage) {
 			"* %s: %s: reads=%d, writes=%d, read=%d, written=%d",
 			service, device, stat.reads, stat.writes, stat.read, stat.written)
 
-		labels := newLabels(service, device)
+		metrics <- prometheus.MustNewConstMetric(readsMetric, prometheus.CounterValue, float64(stat.reads), service, device)
+		metrics <- prometheus.MustNewConstMetric(writesMetric, prometheus.CounterValue, float64(stat.writes), service, device)
 
-		readsMetric.With(labels).Set(float64(stat.reads))
-		writesMetric.With(labels).Set(float64(stat.writes))
-
-		readBytesMetric.With(labels).Set(float64(stat.read))
-		writtenBytesMetric.With(labels).Set(float64(stat.written))
+		metrics <- prometheus.MustNewConstMetric(readBytesMetric, prometheus.CounterValue, float64(stat.read), service, device)
+		metrics <- prometheus.MustNewConstMetric(writtenBytesMetric, prometheus.CounterValue, float64(stat.written), service, device)
 	}
 }
 

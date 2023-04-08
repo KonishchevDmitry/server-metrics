@@ -17,10 +17,10 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
-var rssMetric = metrics.ServiceMetric("memory", "rss", "Anonymous and swap cache memory usage.")
-var swapMetric = metrics.ServiceMetric("memory", "swap", "Non-cached swap usage.")
-var cacheMetric = metrics.ServiceMetric("memory", "cache", "Page cache memory usage.")
-var kernelMetric = metrics.ServiceMetric("memory", "kernel", "Kernel data structures.")
+var rssMetric = metrics.ServiceDesc("memory", "rss", "Anonymous and swap cache memory usage.")
+var swapMetric = metrics.ServiceDesc("memory", "swap", "Non-cached swap usage.")
+var cacheMetric = metrics.ServiceDesc("memory", "cache", "Page cache memory usage.")
+var kernelMetric = metrics.ServiceDesc("memory", "kernel", "Kernel data structures.")
 
 type Collector struct {
 }
@@ -31,16 +31,22 @@ func NewCollector() *Collector {
 	return &Collector{}
 }
 
-func (c *Collector) Reset() {
-	for _, metric := range []*prometheus.GaugeVec{rssMetric, swapMetric, cacheMetric, kernelMetric} {
-		metric.Reset()
-	}
+func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
+	descs <- rssMetric
+	descs <- swapMetric
+	descs <- cacheMetric
+	descs <- kernelMetric
 }
 
-func (c *Collector) GC(ctx context.Context) {
+func (c *Collector) Pre() {
 }
 
-func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
+func (c *Collector) Post(ctx context.Context) {
+}
+
+func (c *Collector) Collect(
+	ctx context.Context, service string, group *cgroups.Group, exclude []string, metrics chan<- prometheus.Metric,
+) (bool, error) {
 	usage, exists, err := c.collect(group)
 	if err != nil || !exists {
 		return exists, err
@@ -69,7 +75,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 		}
 	}
 
-	c.record(ctx, service, usage)
+	c.record(ctx, service, usage, metrics)
 	return true, nil
 }
 
@@ -154,16 +160,15 @@ func (c *Collector) collectRoot(group *cgroups.Group, usage Usage, children []*c
 	return usage, true, nil
 }
 
-func (c *Collector) record(ctx context.Context, service string, usage Usage) {
+func (c *Collector) record(ctx context.Context, service string, usage Usage, metrics chan<- prometheus.Metric) {
 	logging.L(ctx).Debugf(
 		"* %s: memory: rss=%d, swap=%d, cache=%d, kernel=%d",
 		service, usage.rss, usage.swap, usage.cache, usage.kernel)
 
-	labels := metrics.ServiceLabels(service)
-	rssMetric.With(labels).Set(float64(usage.rss))
-	swapMetric.With(labels).Set(float64(usage.swap))
-	cacheMetric.With(labels).Set(float64(usage.cache))
-	kernelMetric.With(labels).Set(float64(usage.kernel))
+	metrics <- prometheus.MustNewConstMetric(rssMetric, prometheus.GaugeValue, float64(usage.rss), service)
+	metrics <- prometheus.MustNewConstMetric(swapMetric, prometheus.GaugeValue, float64(usage.swap), service)
+	metrics <- prometheus.MustNewConstMetric(cacheMetric, prometheus.GaugeValue, float64(usage.cache), service)
+	metrics <- prometheus.MustNewConstMetric(kernelMetric, prometheus.GaugeValue, float64(usage.kernel), service)
 }
 
 type Usage struct {

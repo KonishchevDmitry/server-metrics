@@ -10,6 +10,7 @@ type GenericMetric interface {
 	Reset()
 }
 
+// FIXME(konishchev): Deprecated
 func Metric(namespace string, subsystem string, name string, help string, labels ...string) *prometheus.GaugeVec {
 	metric := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: Namespace + "_" + namespace,
@@ -45,11 +46,12 @@ func NetworkLabels(family string) prometheus.Labels {
 	return prometheus.Labels{FamilyLabel: family}
 }
 
-func ServiceMetric(subsystem string, name string, help string, labels ...string) *prometheus.GaugeVec {
+func ServiceDesc(subsystem string, name string, help string, labels ...string) *prometheus.Desc {
 	labels = append([]string{serviceLabel}, labels...)
-	return Metric("services", subsystem, name, help, labels...)
+	return desc("services", subsystem, name, help, labels...)
 }
 
-func ServiceLabels(service string) prometheus.Labels {
-	return prometheus.Labels{serviceLabel: service}
+func desc(namespace string, subsystem string, name string, help string, labels ...string) *prometheus.Desc {
+	name = prometheus.BuildFQName(Namespace+"_"+namespace, subsystem, name)
+	return prometheus.NewDesc(name, help, labels, nil)
 }

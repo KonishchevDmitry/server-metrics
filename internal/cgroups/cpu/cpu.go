@@ -13,8 +13,8 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
-var userMetric = metrics.ServiceMetric("cpu", "user", "CPU time consumed in user mode.")
-var systemMetric = metrics.ServiceMetric("cpu", "system", "CPU time consumed in system (kernel) mode.")
+var userMetric = metrics.ServiceDesc("cpu", "user", "CPU time consumed in user mode.")
+var systemMetric = metrics.ServiceDesc("cpu", "system", "CPU time consumed in system (kernel) mode.")
 
 type Collector struct {
 	roots map[string]*rootState
@@ -26,16 +26,18 @@ func NewCollector() *Collector {
 	return &Collector{roots: make(map[string]*rootState)}
 }
 
-func (c *Collector) Reset() {
+func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
+	descs <- userMetric
+	descs <- systemMetric
+}
+
+func (c *Collector) Pre() {
 	for _, state := range c.roots {
 		state.collected = false
 	}
-	for _, metric := range []*prometheus.GaugeVec{userMetric, systemMetric} {
-		metric.Reset()
-	}
 }
 
-func (c *Collector) GC(ctx context.Context) {
+func (c *Collector) Post(ctx context.Context) {
 	for name, state := range c.roots {
 		if !state.collected {
 			if cgroups.NewGroup(name).IsRoot() {
@@ -48,7 +50,9 @@ func (c *Collector) GC(ctx context.Context) {
 	}
 }
 
-func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
+func (c *Collector) Collect(
+	ctx context.Context, service string, group *cgroups.Group, exclude []string, metrics chan<- prometheus.Metric,
+) (bool, error) {
 	var (
 		isRoot   bool
 		children []*cgroups.Group
@@ -81,7 +85,7 @@ func (c *Collector) Collect(ctx context.Context, service string, group *cgroups.
 		}
 	}
 
-	c.record(ctx, service, usage)
+	c.record(ctx, service, usage, metrics)
 	return true, nil
 }
 
@@ -152,16 +156,15 @@ func (c *Collector) collectRoot(group *cgroups.Group, usage Usage, children []*c
 	return state.netUsage, true, nil
 }
 
-func (c *Collector) record(ctx context.Context, service string, usage Usage) {
+func (c *Collector) record(ctx context.Context, service string, usage Usage, metrics chan<- prometheus.Metric) {
 	const usec = 1_000_000
 
 	user := float64(usage.user) / usec
 	system := float64(usage.system) / usec
 	logging.L(ctx).Debugf("* %s: cpu: user=%.1fs, system=%.1fs", service, user, system)
 
-	labels := metrics.ServiceLabels(service)
-	userMetric.With(labels).Set(user)
-	systemMetric.With(labels).Set(system)
+	metrics <- prometheus.MustNewConstMetric(userMetric, prometheus.CounterValue, float64(user), service)
+	metrics <- prometheus.MustNewConstMetric(systemMetric, prometheus.CounterValue, float64(system), service)
 }
 
 type Usage struct {

@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
@@ -18,12 +20,15 @@ import (
 )
 
 type Collector struct {
+	lock       sync.Mutex
+	logger     *zap.SugaredLogger
 	classifier *classifier.Classifier
 	collectors []cgroups.Collector
 }
 
-func NewCollector(classifier *classifier.Classifier) *Collector {
+func NewCollector(logger *zap.SugaredLogger, classifier *classifier.Classifier) *Collector {
 	return &Collector{
+		logger:     logger,
 		classifier: classifier,
 		collectors: []cgroups.Collector{
 			cpu.NewCollector(),
@@ -33,15 +38,26 @@ func NewCollector(classifier *classifier.Classifier) *Collector {
 	}
 }
 
-func (c *Collector) Collect(ctx context.Context) {
+func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
 	for _, collector := range c.collectors {
-		collector.Reset()
+		collector.Describe(descs)
+	}
+}
+
+func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
+	ctx := logging.WithLogger(context.Background(), c.logger)
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	for _, collector := range c.collectors {
+		collector.Pre()
 	}
 
 	root := cgroups.NewGroup("/")
 	services := make(map[string]string)
 
-	exists, err := c.observe(ctx, root, services)
+	exists, err := c.observe(ctx, root, services, metrics)
 	if err == nil && !exists {
 		err = fmt.Errorf("%q is not mounted", root.Path())
 	}
@@ -51,11 +67,13 @@ func (c *Collector) Collect(ctx context.Context) {
 	}
 
 	for _, collector := range c.collectors {
-		collector.GC(ctx)
+		collector.Post(ctx)
 	}
 }
 
-func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services map[string]string) (bool, error) {
+func (c *Collector) observe(
+	ctx context.Context, group *cgroups.Group, services map[string]string, metrics chan<- prometheus.Metric,
+) (bool, error) {
 	classification, classified, err := c.classifier.ClassifySlice(ctx, group.Name)
 	if err != nil {
 		logging.L(ctx).Errorf("Failed to classify %q cgroup: %s.", group.Name, err)
@@ -65,7 +83,7 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 
 	if classification.TotalCollection {
 		for _, name := range classification.TotalExcludeChildren {
-			if _, err := c.observe(ctx, group.Child(name), services); err != nil {
+			if _, err := c.observe(ctx, group.Child(name), services, metrics); err != nil {
 				return false, err
 			}
 		}
@@ -110,7 +128,7 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 			}
 
 			for _, child := range children {
-				if exists, err := c.observe(ctx, child, services); err != nil {
+				if exists, err := c.observe(ctx, child, services, metrics); err != nil {
 					return false, err
 				} else if !exists {
 					logging.L(ctx).Debugf("%q has been deleted during discovering.", child.Path())
@@ -132,7 +150,7 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 	}
 	services[classification.Service] = group.Name
 
-	if exists, err := c.collect(ctx, classification.Service, group, classification.TotalExcludeChildren); err != nil {
+	if exists, err := c.collect(ctx, classification.Service, group, classification.TotalExcludeChildren, metrics); err != nil {
 		logging.L(ctx).Errorf("Failed to collect metrics for %s cgroup: %s.", group.Name, err)
 	} else if !exists {
 		return false, nil
@@ -141,7 +159,9 @@ func (c *Collector) observe(ctx context.Context, group *cgroups.Group, services 
 	return true, nil
 }
 
-func (c *Collector) collect(ctx context.Context, service string, group *cgroups.Group, exclude []string) (bool, error) {
+func (c *Collector) collect(
+	ctx context.Context, service string, group *cgroups.Group, exclude []string, metrics chan<- prometheus.Metric,
+) (bool, error) {
 	if logger := logging.L(ctx); logger.Desugar().Core().Enabled(zap.DebugLevel) {
 		var buf bytes.Buffer
 		_, _ = fmt.Fprintf(&buf, "Collecting %s", group.Name)
@@ -162,7 +182,7 @@ func (c *Collector) collect(ctx context.Context, service string, group *cgroups.
 	}
 
 	for _, collector := range c.collectors {
-		if exists, err := collector.Collect(ctx, service, group, exclude); err != nil || !exists {
+		if exists, err := collector.Collect(ctx, service, group, exclude, metrics); err != nil || !exists {
 			return exists, err
 		}
 	}
