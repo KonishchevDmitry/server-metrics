@@ -35,6 +35,10 @@ linters:
 issues:
   exclude-rules:
     - linters:
+        - contextcheck
+      text: "Function `[^`]+` should pass the context parameter"
+
+    - linters:
         - gocritic
       text: "ifElseChain: rewrite if-else to switch statement"
 
@@ -48,7 +52,15 @@ issues:
 
     - linters:
         - revive
+      text: "empty-block: this block is empty, you can remove it"
+
+    - linters:
+        - revive
       text: "indent-error-flow: if block ends with a return statement, so drop this else and outdent its block"
+
+    - linters:
+        - revive
+      text: "unused-parameter: parameter '[^']+' seems to be unused, consider removing or renaming it as _"
 
     - linters:
         - stylecheck
