@@ -1,21 +1,12 @@
 package memory
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
+)
 
-var rssMetric = prometheus.NewDesc(
-	"memory_rss", "Anonymous and swap cache memory usage.",
-	metricLabels, nil)
+var metricBuilder = metrics.MakeDescBuilder("services_memory").WithLabels("service")
 
-var swapMetric = prometheus.NewDesc(
-	"memory_swap", "Non-cached swap usage.",
-	metricLabels, nil)
-
-var cacheMetric = prometheus.NewDesc(
-	"memory_cache", "Page cache memory usage.",
-	metricLabels, nil)
-
-var kernelMetric = prometheus.NewDesc(
-	"memory_kernel", "Kernel data structures.",
-	metricLabels, nil)
-
-var metricLabels = []string{"service"}
+var rssMetric = metricBuilder.Build("rss", "Anonymous and swap cache memory usage.", nil)
+var swapMetric = metricBuilder.Build("swap", "Non-cached swap usage.", nil)
+var cacheMetric = metricBuilder.Build("cache", "Page cache memory usage.", nil)
+var kernelMetric = metricBuilder.Build("kernel", "Kernel data structures.", nil)

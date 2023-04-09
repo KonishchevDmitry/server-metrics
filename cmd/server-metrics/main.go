@@ -13,7 +13,6 @@ import (
 	cgroupscollector "github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
-	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 	"github.com/KonishchevDmitry/server-metrics/internal/network"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
@@ -67,7 +66,11 @@ func execute(cmd *cobra.Command) error {
 	}()
 
 	cgroupClassifier := cgroupclassifier.New(users.NewResolver(), dockerResolver)
+
 	cgroupsCollector := cgroupscollector.NewCollector(logger, cgroupClassifier)
+	if err := prometheus.DefaultRegisterer.Register(cgroupsCollector); err != nil {
+		return err
+	}
 
 	networkCollector, err := network.NewCollector(logger, develMode)
 	if err != nil {
@@ -75,17 +78,7 @@ func execute(cmd *cobra.Command) error {
 	}
 	defer networkCollector.Close(ctx)
 
-	registry := prometheus.NewRegistry()
-	if develMode {
-		registry = prometheus.NewPedanticRegistry()
-	}
-	if err := prometheus.WrapRegistererWithPrefix("services_", registry).Register(cgroupsCollector); err != nil {
-		return err
-	}
-	if err := prometheus.WrapRegistererWithPrefix("network_", registry).Register(networkCollector); err != nil {
-		return err
-	}
-	if err := prometheus.WrapRegistererWithPrefix(metrics.Namespace+"_", prometheus.DefaultRegisterer).Register(registry); err != nil {
+	if err := prometheus.DefaultRegisterer.Register(networkCollector); err != nil {
 		return err
 	}
 

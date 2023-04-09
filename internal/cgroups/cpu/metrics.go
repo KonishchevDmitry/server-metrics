@@ -1,13 +1,10 @@
 package cpu
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
+)
 
-var userMetric = prometheus.NewDesc(
-	"cpu_user", "CPU time consumed in user mode.",
-	metricLabels, nil)
+var metricBuilder = metrics.MakeDescBuilder("services_cpu").WithLabels("service")
 
-var systemMetric = prometheus.NewDesc(
-	"cpu_system", "CPU time consumed in system (kernel) mode.",
-	metricLabels, nil)
-
-var metricLabels = []string{"service"}
+var userMetric = metricBuilder.Build("user", "CPU time consumed in user mode.", nil)
+var systemMetric = metricBuilder.Build("system", "CPU time consumed in system (kernel) mode.", nil)
