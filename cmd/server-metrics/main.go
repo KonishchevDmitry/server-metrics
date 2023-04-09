@@ -69,7 +69,7 @@ func execute(cmd *cobra.Command) error {
 	cgroupsCollector := cgroupscollector.NewCollector(logger, cgroupClassifier)
 
 	// FIXME(konishchev): Use custom registry with namespace?
-	prometheus.Register(cgroupsCollector)
+	prometheus.MustRegister(cgroupsCollector)
 
 	networkCollector, err := network.NewCollector(develMode)
 	if err != nil {

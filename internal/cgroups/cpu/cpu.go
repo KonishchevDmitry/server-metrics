@@ -163,8 +163,8 @@ func (c *Collector) record(ctx context.Context, service string, usage Usage, met
 	system := float64(usage.system) / usec
 	logging.L(ctx).Debugf("* %s: cpu: user=%.1fs, system=%.1fs", service, user, system)
 
-	metrics <- prometheus.MustNewConstMetric(userMetric, prometheus.CounterValue, float64(user), service)
-	metrics <- prometheus.MustNewConstMetric(systemMetric, prometheus.CounterValue, float64(system), service)
+	metrics <- prometheus.MustNewConstMetric(userMetric, prometheus.CounterValue, user, service)
+	metrics <- prometheus.MustNewConstMetric(systemMetric, prometheus.CounterValue, system, service)
 }
 
 type Usage struct {
