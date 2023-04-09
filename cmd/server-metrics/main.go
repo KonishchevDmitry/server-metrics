@@ -13,6 +13,7 @@ import (
 	cgroupscollector "github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 	"github.com/KonishchevDmitry/server-metrics/internal/network"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
@@ -68,45 +69,51 @@ func execute(cmd *cobra.Command) error {
 	cgroupClassifier := cgroupclassifier.New(users.NewResolver(), dockerResolver)
 	cgroupsCollector := cgroupscollector.NewCollector(logger, cgroupClassifier)
 
-	// FIXME(konishchev): Use custom registry with namespace?
-	prometheus.MustRegister(cgroupsCollector)
-
-	networkCollector, err := network.NewCollector(develMode)
+	networkCollector, err := network.NewCollector(logger, develMode)
 	if err != nil {
 		return err
 	}
 	defer networkCollector.Close(ctx)
 
-	collect := func(ctx context.Context) {
-		if develMode {
-			metrics := make(chan prometheus.Metric)
+	registry := prometheus.NewRegistry()
+	if develMode {
+		registry = prometheus.NewPedanticRegistry()
+	}
+	if err := prometheus.WrapRegistererWithPrefix("services_", registry).Register(cgroupsCollector); err != nil {
+		return err
+	}
+	if err := prometheus.WrapRegistererWithPrefix("network_", registry).Register(networkCollector); err != nil {
+		return err
+	}
+	if err := prometheus.WrapRegistererWithPrefix(metrics.Namespace+"_", prometheus.DefaultRegisterer).Register(registry); err != nil {
+		return err
+	}
+
+	collect := func() {
+		metrics := make(chan prometheus.Metric)
+
+		go func() {
 			defer close(metrics)
-
-			go func() {
-				for {
-					if _, ok := <-metrics; !ok {
-						break
-					}
-				}
-			}()
-
 			cgroupsCollector.Collect(metrics)
+			networkCollector.Collect(metrics)
+		}()
+
+		for range metrics {
 		}
-		networkCollector.Collect(ctx)
 	}
 
 	if develMode {
 		logger.Info("Running in devel mode.")
 
-		collect(ctx)
+		collect()
 		logger.Info("Sleeping...")
 		time.Sleep(5 * time.Second)
-		collect(ctx)
+		collect()
 
 		return nil
 	}
 
-	return server.Start(ctx, collect)
+	return server.Start(ctx)
 }
 
 func main() {

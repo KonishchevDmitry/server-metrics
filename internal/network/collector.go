@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"sync"
 
 	"github.com/google/nftables"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/samber/mo"
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
@@ -15,43 +17,12 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
-	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
 
-const typeLabelName = "type"
-const protocolLabelName = "protocol"
-
-var uniqueInputIPsMetric = metrics.NetworkMetric(
-	"new_connections", "ips", "Count of IP addresses with new input connection attempts.",
-	metrics.FamilyLabel, typeLabelName)
-
-var inputConnectionsMetric = metrics.NetworkHistogram(
-	"new_connections", "ports", "Count of unique ports with new input connections attempts per IP.",
-	[]float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 30},
-	metrics.FamilyLabel, typeLabelName, protocolLabelName)
-
-var topInputIPMetric = metrics.NetworkMetric(
-	"port_connections", "top_ip", "Count of unique ports with new input connections attempts for the top IP.",
-	metrics.FamilyLabel, typeLabelName, protocolLabelName)
-
-var topForwardIPMetric = metrics.NetworkMetric(
-	"forward_connections", "top_ip", "Count of unique ports with new forward connections attempts for the top IP.")
-
-var inputSetSizeMetric = metrics.NetworkMetric(
-	"port_connections", "set_size", "Size of the sets storing unique ports with new input connections statistics.",
-	metrics.FamilyLabel, protocolLabelName)
-
-var forwardSetSizeMetric = metrics.NetworkMetric(
-	"forward_connections", "set_size", "Size of the sets storing unique ports with new forward connections statistics.",
-	metrics.FamilyLabel)
-
-var allMetrics = []metrics.GenericMetric{
-	uniqueInputIPsMetric, inputConnectionsMetric,
-	topInputIPMetric, topForwardIPMetric,
-	inputSetSizeMetric, forwardSetSizeMetric,
-}
-
 type Collector struct {
+	lock   sync.Mutex
+	logger *zap.SugaredLogger
+
 	connection *nftables.Conn
 	table      mo.Option[*nftables.Table]
 
@@ -59,31 +30,52 @@ type Collector struct {
 	banned map[string]struct{}
 }
 
-func NewCollector(dryRun bool) (retCollector *Collector, retErr error) {
+func NewCollector(logger *zap.SugaredLogger, dryRun bool) (retCollector *Collector, retErr error) {
 	connection, err := nftables.New(nftables.AsLasting())
 	if err != nil {
 		return nil, fmt.Errorf("Unable to open netlink connection: %w", err)
 	}
 	return &Collector{
+		logger:     logger,
 		connection: connection,
 		dryRun:     dryRun,
 	}, nil
 }
 
 func (c *Collector) Close(ctx context.Context) {
-	if err := c.connection.CloseLasting(); err != nil {
-		logging.L(ctx).Errorf("Failed to close netlink connection: %s.", err)
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if c.connection != nil {
+		if err := c.connection.CloseLasting(); err != nil {
+			logging.L(ctx).Errorf("Failed to close netlink connection: %s.", err)
+		}
+		c.connection = nil
 	}
 }
 
-func (c *Collector) Collect(ctx context.Context) {
-	for _, metric := range allMetrics {
-		metric.Reset()
+func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
+	descs <- uniqueInputIPsMetric
+	inputConnectionsMetric().Describe(descs)
+	descs <- topInputIPMetric
+	descs <- topForwardIPMetric
+	descs <- inputSetSizeMetric
+	descs <- forwardSetSizeMetric
+}
+
+func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if c.connection == nil {
+		return
 	}
 
-	toBan, err := c.collectInputIPs(ctx, c.banned)
+	ctx := logging.WithLogger(context.Background(), c.logger)
+
+	toBan, err := c.collectInputIPs(ctx, c.banned, metrics)
 	if err == nil {
-		err = c.collectForwardIPs(ctx)
+		err = c.collectForwardIPs(ctx, metrics)
 	}
 	if err != nil {
 		logging.L(ctx).Errorf("Failed to collect network metrics: %s.", err)
@@ -95,11 +87,16 @@ func (c *Collector) Collect(ctx context.Context) {
 	}
 }
 
-func (c *Collector) collectInputIPs(ctx context.Context, banned map[string]struct{}) (map[string]struct{}, error) {
+func (c *Collector) collectInputIPs(
+	ctx context.Context, banned map[string]struct{}, metrics chan<- prometheus.Metric,
+) (map[string]struct{}, error) {
 	logging.L(ctx).Debugf("Collecting input IPs:")
 
 	addressFamilies := getAddressFamilies()
 	protocols := getProtocolFamilies()
+
+	inputConnections := inputConnectionsMetric()
+	defer inputConnections.Collect(metrics)
 
 	toDelete := make(map[*nftables.Set][]nftables.SetElement)
 
@@ -137,9 +134,9 @@ func (c *Collector) collectInputIPs(ctx context.Context, banned map[string]struc
 			setSize := len(elements)
 			logging.L(ctx).Debugf("* %s %s ports connections set size: %d.", family.name, protocol.name, setSize)
 
-			setLabels := metrics.NetworkLabels(family.label)
-			setLabels[protocolLabelName] = protocol.label
-			inputSetSizeMetric.With(setLabels).Set(float64(setSize))
+			metrics <- prometheus.MustNewConstMetric(
+				inputSetSizeMetric, prometheus.GaugeValue, float64(setSize),
+				family.label, protocol.label)
 
 			for _, element := range elements {
 				if size := len(element.Key); size != int(elementType.Bytes) {
@@ -208,11 +205,7 @@ func (c *Collector) collectInputIPs(ctx context.Context, banned map[string]struc
 
 			for _, protocol := range protocols {
 				ports := len(*protocol.getPorts(stat))
-
-				labels := metrics.NetworkLabels(family.label)
-				labels[typeLabelName] = familyStat.label
-				labels[protocolLabelName] = protocol.label
-				inputConnectionsMetric.With(labels).Observe(float64(ports))
+				inputConnections.WithLabelValues(family.label, familyStat.label, protocol.label).Observe(float64(ports))
 
 				if top := protocol.getTopStat(familyStat); ports > len(*protocol.getPorts(&top.stat)) {
 					top.stat = *stat
@@ -225,9 +218,9 @@ func (c *Collector) collectInputIPs(ctx context.Context, banned map[string]struc
 			logging.L(ctx).Debugf("* Unique %s %s with new connection attempts: %d.",
 				stat.label, family.name, stat.uniqueIPs)
 
-			labels := metrics.NetworkLabels(family.label)
-			labels[typeLabelName] = stat.label
-			uniqueInputIPsMetric.With(labels).Set(float64(stat.uniqueIPs))
+			metrics <- prometheus.MustNewConstMetric(
+				uniqueInputIPsMetric, prometheus.GaugeValue, float64(stat.uniqueIPs),
+				family.label, stat.label)
 
 			for _, protocol := range protocols {
 				top := protocol.getTopStat(stat)
@@ -239,10 +232,9 @@ func (c *Collector) collectInputIPs(ctx context.Context, banned map[string]struc
 						stat.label, family.name, protocol.name, ip, top.stat, score)
 				}
 
-				labels := metrics.NetworkLabels(family.label)
-				labels[typeLabelName] = stat.label
-				labels[protocolLabelName] = protocol.label
-				topInputIPMetric.With(labels).Set(float64(len(*protocol.getPorts(&top.stat))))
+				metrics <- prometheus.MustNewConstMetric(
+					topInputIPMetric, prometheus.GaugeValue, float64(len(*protocol.getPorts(&top.stat))),
+					family.label, stat.label, protocol.label)
 			}
 		}
 	}
@@ -267,7 +259,7 @@ func (c *Collector) collectInputIPs(ctx context.Context, banned map[string]struc
 	return toBan, nil
 }
 
-func (c *Collector) collectForwardIPs(ctx context.Context) error {
+func (c *Collector) collectForwardIPs(ctx context.Context, metrics chan<- prometheus.Metric) error {
 	logging.L(ctx).Debugf("Collecting forward IPs:")
 
 	protocolType := nftables.TypeInetProto
@@ -306,7 +298,10 @@ func (c *Collector) collectForwardIPs(ctx context.Context) error {
 		}
 
 		setSize := len(elements)
-		forwardSetSizeMetric.With(metrics.NetworkLabels(family.label)).Set(float64(setSize))
+		metrics <- prometheus.MustNewConstMetric(
+			forwardSetSizeMetric, prometheus.GaugeValue, float64(setSize),
+			family.label)
+
 		logging.L(ctx).Debugf("* %s forward connections set size: %d.", family.name, setSize)
 
 		for _, element := range elements {
@@ -365,7 +360,8 @@ func (c *Collector) collectForwardIPs(ctx context.Context) error {
 	}
 
 	if topIPStat, ok := top.Get(); ok {
-		topForwardIPMetric.WithLabelValues().Set(float64(topIPStat.total))
+		metrics <- prometheus.MustNewConstMetric(
+			topForwardIPMetric, prometheus.GaugeValue, float64(topIPStat.total))
 	}
 
 	if debugMode {

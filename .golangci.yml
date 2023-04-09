@@ -51,6 +51,10 @@ issues:
       text: "`if` block ends with a `return` statement, so drop this `else` and outdent its block"
 
     - linters:
+        - promlinter
+      text: "Error: counter metrics should have \"_total\" suffix"
+
+    - linters:
         - revive
       text: "empty-block: this block is empty, you can remove it"
 

@@ -2,16 +2,22 @@ package io
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
 
-var readsMetric = newDesc("reads", "Number of read operations issued to the disk by the service.")
-var writesMetric = newDesc("writes", "Number of write operations issued to the disk by the service.")
+var readsMetric = prometheus.NewDesc(
+	"blkio_reads", "Number of read operations issued to the disk by the service.",
+	metricLabels, nil)
 
-var readBytesMetric = newDesc("read_bytes", "Number of bytes read from the disk by the service.")
-var writtenBytesMetric = newDesc("written_bytes", "Number of bytes written to the disk by the service.")
+var writesMetric = prometheus.NewDesc(
+	"blkio_writes", "Number of write operations issued to the disk by the service.",
+	metricLabels, nil)
 
-func newDesc(name string, help string) *prometheus.Desc {
-	return metrics.ServiceDesc("blkio", name, help, "device")
-}
+var readBytesMetric = prometheus.NewDesc(
+	"blkio_read_bytes", "Number of bytes read from the disk by the service.",
+	metricLabels, nil)
+
+var writtenBytesMetric = prometheus.NewDesc(
+	"blkio_written_bytes", "Number of bytes written to the disk by the service.",
+	metricLabels, nil)
+
+var metricLabels = []string{"service", "device"}

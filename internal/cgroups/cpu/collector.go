@@ -9,12 +9,8 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
-	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
-
-var userMetric = metrics.ServiceDesc("cpu", "user", "CPU time consumed in user mode.")
-var systemMetric = metrics.ServiceDesc("cpu", "system", "CPU time consumed in system (kernel) mode.")
 
 type Collector struct {
 	roots map[string]*rootState

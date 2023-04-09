@@ -3,7 +3,6 @@ package logging
 import (
 	"context"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
@@ -13,16 +12,7 @@ import (
 
 const encoderName = "custom"
 
-var errorsMetric = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: metrics.Namespace,
-	Subsystem: "metrics",
-	Name:      "errors",
-	Help:      "Metrics collection errors.",
-})
-
 func init() {
-	prometheus.MustRegister(errorsMetric)
-
 	if err := zap.RegisterEncoder(encoderName, func(config zapcore.EncoderConfig) (zapcore.Encoder, error) {
 		return newEncoder(zapcore.NewConsoleEncoder(config)), nil
 	}); err != nil {
@@ -80,7 +70,7 @@ func (e encoder) Clone() zapcore.Encoder {
 
 func (e encoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
 	if entry.Level >= zapcore.ErrorLevel {
-		errorsMetric.Inc()
+		metrics.ErrorsMetric.Inc()
 	}
 	return e.Encoder.EncodeEntry(entry, fields)
 }

@@ -13,14 +13,8 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
-	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
-
-var rssMetric = metrics.ServiceDesc("memory", "rss", "Anonymous and swap cache memory usage.")
-var swapMetric = metrics.ServiceDesc("memory", "swap", "Non-cached swap usage.")
-var cacheMetric = metrics.ServiceDesc("memory", "cache", "Page cache memory usage.")
-var kernelMetric = metrics.ServiceDesc("memory", "kernel", "Kernel data structures.")
 
 type Collector struct {
 }
