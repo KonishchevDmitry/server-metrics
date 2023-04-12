@@ -26,6 +26,8 @@ type Collector struct {
 	collectors []cgroups.Collector
 }
 
+var _ prometheus.Collector = &Collector{}
+
 func NewCollector(logger *zap.SugaredLogger, classifier *classifier.Classifier) *Collector {
 	return &Collector{
 		logger:     logger,
