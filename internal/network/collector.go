@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/google/nftables"
@@ -29,6 +30,8 @@ type Collector struct {
 	dryRun bool
 	banned map[string]struct{}
 }
+
+var _ prometheus.Collector = &Collector{}
 
 func NewCollector(logger *zap.SugaredLogger, dryRun bool) (retCollector *Collector, retErr error) {
 	connection, err := nftables.New(nftables.AsLasting())
@@ -275,6 +278,7 @@ func (c *Collector) collectForwardIPs(ctx context.Context, metrics chan<- promet
 	portTypePadding := 4 - portType.Bytes
 
 	stats := make(map[string]*forwardIPStat)
+	debugMode := logging.L(ctx).Level() <= zap.DebugLevel
 
 	for _, family := range getAddressFamilies() {
 		expectedSize := family.dataType.Bytes + family.dataType.Bytes + protocolType.Bytes + protocolTypePadding + portType.Bytes + portTypePadding
@@ -328,7 +332,19 @@ func (c *Collector) collectForwardIPs(ctx context.Context, metrics chan<- promet
 
 			stat, ok := stats[ip]
 			if !ok {
-				stat = newForwardIPStat(ip)
+				name := ip
+
+				if debugMode {
+					names, err := net.LookupAddr(ip)
+					if err != nil {
+						logging.L(ctx).Errorf("Failed to lookup %s: %s.", ip, err)
+					}
+					if len(names) != 0 {
+						name = fmt.Sprintf("%s (%s)", strings.TrimSuffix(names[0], "."), ip)
+					}
+				}
+
+				stat = newForwardIPStat(name)
 				stats[ip] = stat
 			}
 
@@ -347,7 +363,6 @@ func (c *Collector) collectForwardIPs(ctx context.Context, metrics chan<- promet
 
 	var all []*forwardIPStat
 	var top mo.Option[*forwardIPStat]
-	debugMode := logging.L(ctx).Level() <= zap.DebugLevel
 
 	for _, stat := range stats {
 		if topStat, ok := top.Get(); !ok || topStat.total < stat.total {

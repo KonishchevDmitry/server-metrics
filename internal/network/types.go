@@ -109,24 +109,24 @@ func (s ipStat) String() string {
 }
 
 type forwardIPStat struct {
-	ip    string
+	name  string
 	tcp   map[uint16]int
 	udp   map[uint16]int
 	total int
 }
 
-func newForwardIPStat(ip string) *forwardIPStat {
+func newForwardIPStat(name string) *forwardIPStat {
 	return &forwardIPStat{
-		ip:  ip,
-		tcp: make(map[uint16]int),
-		udp: make(map[uint16]int),
+		name: name,
+		tcp:  make(map[uint16]int),
+		udp:  make(map[uint16]int),
 	}
 }
 
 func (s *forwardIPStat) String() string {
 	var buf bytes.Buffer
 
-	_, _ = fmt.Fprintf(&buf, "%s (%d IP+port pairs): ", s.ip, s.total)
+	_, _ = fmt.Fprintf(&buf, "%s (%d IP+port pairs): ", s.name, s.total)
 	formatPortStat(&buf, "TCP", s.tcp)
 	buf.WriteString(", ")
 	formatPortStat(&buf, "UDP", s.udp)
