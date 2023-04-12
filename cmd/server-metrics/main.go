@@ -12,6 +12,7 @@ import (
 	cgroupclassifier "github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
 	cgroupscollector "github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
+	"github.com/KonishchevDmitry/server-metrics/internal/kernel"
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/network"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
@@ -57,6 +58,12 @@ func execute(cmd *cobra.Command) error {
 		_ = logger.Sync() // Always fails to sync stderr
 	}()
 	ctx := logging.WithLogger(context.Background(), logger)
+
+	kernelCollector, err := kernel.NewCollector(ctx)
+	if err != nil {
+		return err
+	}
+	defer kernelCollector.Close(ctx)
 
 	dockerResolver := docker.NewResolver()
 	defer func() {
