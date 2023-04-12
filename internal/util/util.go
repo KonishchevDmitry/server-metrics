@@ -6,8 +6,27 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
+
+type WaitGroup struct {
+	group sync.WaitGroup
+}
+
+func (g *WaitGroup) Run(runner func()) {
+	g.group.Add(1)
+	go func() {
+		defer g.group.Done()
+		runner()
+	}()
+}
+
+func (g *WaitGroup) Wait() {
+	g.group.Wait()
+}
 
 func ReadFile(path string, reader func(file io.Reader) error) (resErr error) {
 	file, err := os.Open(path)
@@ -58,4 +77,12 @@ func RetryRace(failure error, retry func() (bool, error)) error {
 	}
 
 	return failure
+}
+
+func Uptime() time.Duration {
+	var timespec unix.Timespec
+	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &timespec); err != nil {
+		panic(err)
+	}
+	return time.Duration(timespec.Nano()) * time.Nanosecond
 }

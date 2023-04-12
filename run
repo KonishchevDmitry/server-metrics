@@ -5,8 +5,9 @@ export DOCKER_CONTEXT=server
 
 DOCKER_BUILDKIT=1 docker build -t konishchev/server-metrics .
 
-docker run --rm --pid host --network host \
-    --read-only --cap-drop all --cap-add NET_ADMIN --security-opt no-new-privileges \
+docker run --rm --pid host --network host --read-only \
+    --cap-drop all --cap-add NET_ADMIN --cap-add CAP_SYSLOG --security-opt no-new-privileges \
+    --device /dev/kmsg:/dev/kmsg \
     --mount type=bind,src=/dev,dst=/dev,readonly \
     --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
     --mount type=bind,src=/sys/fs/cgroup,dst=/sys/fs/cgroup,readonly \
