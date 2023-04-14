@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -50,5 +51,16 @@ type prometheusLogger struct {
 }
 
 func (l prometheusLogger) Println(v ...interface{}) {
-	l.logger.Errorf("Prometheus: %s.", fmt.Sprintln(v...))
+	logger := l.logger.Errorf
+
+	for _, value := range v {
+		if err, ok := value.(error); ok {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				logger = l.logger.Infof
+			}
+			break
+		}
+	}
+
+	logger("Prometheus: %s.", fmt.Sprint(v...))
 }
