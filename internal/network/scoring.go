@@ -1,16 +1,12 @@
 package network
 
-// Threshold is bigger for UDP, because there are chances of false positives for forwarded packets due to conntrack
-// expiration, which is not the case for TCP.
-
 const localTCPPortScanThreshold = 10
 const remoteTCPPortScanThreshold = 5
 
-// FIXME(konishchev): Conntrack is too unreliable for UDP. Drop it?
-const localUDPPortScanThreshold = 1000000000
-const remoteUDPPortScanThreshold = 1000000000
+const localUDPPortScanThreshold = 10
+const remoteUDPPortScanThreshold = 5
 
-const publicPortScore = 0
+const allowedPortScore = 0
 const unknownPortScore = 1
 const portScanScore = 3
 
@@ -26,25 +22,17 @@ func scorePortsUsage(ports []uint16, local bool, scoreFunc scorePortFunc) int {
 
 func scoreTCPPort(port uint16, local bool) int {
 	switch port {
-	case 22, 80, 443:
-		return publicPortScore
-
 	case
-		7,        // Android devices send echo requests to default gateway for some reason
-		53,       // DNS over TCP
-		139, 445, // Samba
-		2222,        // VM SSH
-		3389,        // VM RDP
-		6771,        // Transmission LSD
-		8384, 22000, // Syncthing
-		32400: // Plex
+		7,  // Android devices send echo requests to default gateway for some reason
+		53: // DNS over TCP
 		return localOnlyPort(local)
 
 	case
-		21,         // FTP
-		23,         // Telnet
-		25,         // SMTP
-		110,        // POP3
+		21,       // FTP
+		23,       // Telnet
+		25,       // SMTP
+		110,      // POP3
+		139, 445, // Samba
 		143,        // IMAP
 		389,        // LDAP
 		465,        // SMTP + TLS
@@ -56,6 +44,7 @@ func scoreTCPPort(port uint16, local bool) int {
 		2376,       // Docker REST API
 		3128,       // Proxy
 		3306,       // MySQL
+		3389,       // RDP
 		4899,       // Radmin
 		5432,       // PostgreSQL
 		5900, 5901, // VNC
@@ -73,22 +62,14 @@ func scoreTCPPort(port uint16, local bool) int {
 func scoreUDPPort(port uint16, local bool) int {
 	switch port {
 	case
-		1194,  // OpenVPN
-		10101, // WireGuard
-
-		60000, 60001, 60002, 60003, 60004, 60005, 60006, 60007, 60008, 60009, 60010: // Mosh
-		return publicPortScore
-
-	case
-		53,     // DNS
-		67, 68, // DHCP
-		137, 138, // Samba
 		5353,         // Multicast DNS
-		21027, 22000, // Syncthing
 		32412, 32414: // Plex Player discovery
 		return localOnlyPort(local)
 
-	case 5060: // Session Initiation Protocol (SIP)
+	case
+		53,       // DNS
+		137, 138, // Samba
+		5060: // Session Initiation Protocol (SIP)
 		return portScanScore
 
 	default:
@@ -98,7 +79,7 @@ func scoreUDPPort(port uint16, local bool) int {
 
 func localOnlyPort(local bool) int {
 	if local {
-		return publicPortScore
+		return allowedPortScore
 	} else {
 		return portScanScore
 	}

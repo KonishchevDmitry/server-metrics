@@ -87,10 +87,10 @@ func newProtocolFamily(
 }
 
 type addressFamilyStat struct {
-	label     string
-	uniqueIPs int
-	topTCP    topIPStat
-	topUDP    topIPStat
+	label  string
+	ips    int
+	topTCP topIPStat
+	topUDP topIPStat
 }
 
 type topIPStat struct {

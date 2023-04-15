@@ -14,10 +14,9 @@ import (
 	"github.com/samber/mo"
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
 type Collector struct {
@@ -58,11 +57,11 @@ func (c *Collector) Close(ctx context.Context) {
 }
 
 func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
-	descs <- uniqueInputIPsMetric
-	inputConnectionsMetric().Describe(descs)
-	descs <- topInputIPMetric
+	descs <- inputRejectsIPsMetric
+	inputRejectsMetric().Describe(descs)
+	descs <- inputRejectsTOPIPMetric
 	descs <- topForwardIPMetric
-	descs <- inputSetSizeMetric
+	descs <- inputRejectsSetSizeMetric
 	descs <- forwardSetSizeMetric
 }
 
@@ -76,7 +75,7 @@ func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
 
 	ctx := logging.WithLogger(context.Background(), c.logger)
 
-	toBan, err := c.collectInputIPs(ctx, c.banned, metrics)
+	toBan, err := c.collectInputRejects(ctx, c.banned, metrics)
 	if err == nil {
 		err = c.collectForwardIPs(ctx, metrics)
 	}
@@ -90,16 +89,16 @@ func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
 	}
 }
 
-func (c *Collector) collectInputIPs(
+func (c *Collector) collectInputRejects(
 	ctx context.Context, banned map[string]struct{}, metrics chan<- prometheus.Metric,
 ) (map[string]struct{}, error) {
-	logging.L(ctx).Debugf("Collecting input IPs:")
+	logging.L(ctx).Debugf("Collecting input rejects:")
 
 	addressFamilies := getAddressFamilies()
 	protocols := getProtocolFamilies()
 
-	inputConnections := inputConnectionsMetric()
-	defer inputConnections.Collect(metrics)
+	inputRejects := inputRejectsMetric()
+	defer inputRejects.Collect(metrics)
 
 	toDelete := make(map[*nftables.Set][]nftables.SetElement)
 
@@ -127,7 +126,7 @@ func (c *Collector) collectInputIPs(
 		}
 
 		for _, protocol := range protocols {
-			setName := fmt.Sprintf("%s%d_ports_connections", protocol.label, family.version)
+			setName := fmt.Sprintf("%s%d_rejects", protocol.label, family.version)
 
 			set, elements, err := c.getSet(setName)
 			if err != nil {
@@ -135,10 +134,10 @@ func (c *Collector) collectInputIPs(
 			}
 
 			setSize := len(elements)
-			logging.L(ctx).Debugf("* %s %s ports connections set size: %d.", family.name, protocol.name, setSize)
+			logging.L(ctx).Debugf("* %s %s rejects set size: %d.", family.name, protocol.name, setSize)
 
 			metrics <- prometheus.MustNewConstMetric(
-				inputSetSizeMetric, prometheus.GaugeValue, float64(setSize),
+				inputRejectsSetSizeMetric, prometheus.GaugeValue, float64(setSize),
 				family.label, protocol.label)
 
 			for _, element := range elements {
@@ -195,20 +194,20 @@ func (c *Collector) collectInputIPs(
 				familyStat, tcpThreshold, udpThreshold = &localStat, localTCPPortScanThreshold, localUDPPortScanThreshold
 			}
 
-			familyStat.uniqueIPs++
+			familyStat.ips++
 			tcpScore := scorePortsUsage(stat.tcp, isLocalNetwork, scoreTCPPort)
 			udpScore := scorePortsUsage(stat.udp, isLocalNetwork, scoreUDPPort)
 
 			if tcpScore > tcpThreshold || udpScore > udpThreshold {
 				logging.L(ctx).Warnf("%s port scan detected: %s: %s. TCP score: %d, UDP score: %d.",
-					cases.Title(language.English).String(familyStat.label), ip, stat, tcpScore, udpScore)
+					util.Title(familyStat.label), ip, stat, tcpScore, udpScore)
 				toBan[ip.String()] = struct{}{}
 				continue
 			}
 
 			for _, protocol := range protocols {
 				ports := len(*protocol.getPorts(stat))
-				inputConnections.WithLabelValues(family.label, familyStat.label, protocol.label).Observe(float64(ports))
+				inputRejects.WithLabelValues(family.label, familyStat.label, protocol.label).Observe(float64(ports))
 
 				if top := protocol.getTopStat(familyStat); ports > len(*protocol.getPorts(&top.stat)) {
 					top.stat = *stat
@@ -218,11 +217,11 @@ func (c *Collector) collectInputIPs(
 		}
 
 		for _, stat := range []*addressFamilyStat{&localStat, &remoteStat} {
-			logging.L(ctx).Debugf("* Unique %s %s with new connection attempts: %d.",
-				stat.label, family.name, stat.uniqueIPs)
+			logging.L(ctx).Debugf("* %s %s with rejects: %d.",
+				util.Title(stat.label), family.name, stat.ips)
 
 			metrics <- prometheus.MustNewConstMetric(
-				uniqueInputIPsMetric, prometheus.GaugeValue, float64(stat.uniqueIPs),
+				inputRejectsIPsMetric, prometheus.GaugeValue, float64(stat.ips),
 				family.label, stat.label)
 
 			for _, protocol := range protocols {
@@ -231,12 +230,12 @@ func (c *Collector) collectInputIPs(
 				if ip, ok := top.ip.Get(); ok {
 					ports := *protocol.getPorts(&top.stat)
 					score := scorePortsUsage(ports, stat == &localStat, protocol.scorePort)
-					logging.L(ctx).Debugf("* Top %s %s with new %s connection attempts: %s: %s. Score: %d.",
+					logging.L(ctx).Debugf("* Top %s %s with %s rejects: %s: %s. Score: %d.",
 						stat.label, family.name, protocol.name, ip, top.stat, score)
 				}
 
 				metrics <- prometheus.MustNewConstMetric(
-					topInputIPMetric, prometheus.GaugeValue, float64(len(*protocol.getPorts(&top.stat))),
+					inputRejectsTOPIPMetric, prometheus.GaugeValue, float64(len(*protocol.getPorts(&top.stat))),
 					family.label, stat.label, protocol.label)
 			}
 		}
@@ -254,7 +253,7 @@ func (c *Collector) collectInputIPs(
 			}
 
 			if port, ok := topPort.Get(); ok {
-				logging.L(ctx).Debugf("* Most used %s port: %d (%d times).", protocol.name, port, topCount)
+				logging.L(ctx).Debugf("* Top %s rejected port: %d (%d times).", protocol.name, port, topCount)
 			}
 		}
 	}

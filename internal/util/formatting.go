@@ -6,7 +6,13 @@ import (
 	"sort"
 
 	"golang.org/x/exp/constraints"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
+
+func Title(s string) string {
+	return cases.Title(language.English).String(s)
+}
 
 func FormatList[T constraints.Integer](list []T, sorted bool) string {
 	var buf bytes.Buffer
