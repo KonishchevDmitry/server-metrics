@@ -59,11 +59,17 @@ func execute(cmd *cobra.Command) error {
 	}()
 	ctx := logging.WithLogger(context.Background(), logger)
 
+	registry := prometheus.DefaultRegisterer
+
 	kernelCollector, err := kernel.NewCollector(ctx)
 	if err != nil {
 		return err
 	}
 	defer kernelCollector.Close(ctx)
+
+	if err := registry.Register(kernelCollector); err != nil {
+		return err
+	}
 
 	dockerResolver := docker.NewResolver()
 	defer func() {
@@ -75,7 +81,7 @@ func execute(cmd *cobra.Command) error {
 	cgroupClassifier := cgroupclassifier.New(users.NewResolver(), dockerResolver)
 
 	cgroupsCollector := cgroupscollector.NewCollector(logger, cgroupClassifier)
-	if err := prometheus.DefaultRegisterer.Register(cgroupsCollector); err != nil {
+	if err := registry.Register(cgroupsCollector); err != nil {
 		return err
 	}
 
@@ -85,7 +91,7 @@ func execute(cmd *cobra.Command) error {
 	}
 	defer networkCollector.Close(ctx)
 
-	if err := prometheus.DefaultRegisterer.Register(networkCollector); err != nil {
+	if err := registry.Register(networkCollector); err != nil {
 		return err
 	}
 
