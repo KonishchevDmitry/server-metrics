@@ -13,7 +13,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/logging"
-	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
@@ -22,7 +21,7 @@ type Collector struct {
 	newMessages  chan logEntry
 	messageGroup []logEntry
 	waitGroup    util.WaitGroup
-	errors       *prometheus.CounterVec
+	errors       *errorMetrics
 }
 
 var _ prometheus.Collector = &Collector{}
@@ -38,12 +37,7 @@ func NewCollector(ctx context.Context) (*Collector, error) {
 	c := &Collector{
 		kmsg:        kmsg,
 		newMessages: make(chan logEntry),
-		errors: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: metrics.Namespace,
-			Subsystem: "kernel",
-			Name:      "errors",
-			Help:      fmt.Sprintf("Count of kernel errors in %s.", path),
-		}, []string{"type"}),
+		errors:      newErrorMetrics(),
 	}
 	c.waitGroup.Run(func() {
 		defer close(c.newMessages)
@@ -59,11 +53,11 @@ func NewCollector(ctx context.Context) (*Collector, error) {
 }
 
 func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
-	c.errors.Describe(descs)
+	c.errors.metric.Describe(descs)
 }
 
 func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
-	c.errors.Collect(metrics)
+	c.errors.metric.Collect(metrics)
 }
 
 func (c *Collector) logReader(ctx context.Context) error {
@@ -185,7 +179,7 @@ func (c *Collector) processGroup(ctx context.Context) {
 	}
 	c.messageGroup = c.messageGroup[:0]
 
-	c.errors.WithLabelValues("unknown").Inc()
+	c.errors.unknown.Inc()
 	logging.L(ctx).Warnf("Got a kernel error:\n%s", buf.String())
 }
 
