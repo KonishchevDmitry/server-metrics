@@ -21,4 +21,5 @@ docker run --detach --restart unless-stopped \
     --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
     --mount type=bind,src=/sys/fs/cgroup,dst=/sys/fs/cgroup,readonly \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+    --mount type=bind,src=/run/systemd/journal/socket,dst=/run/systemd/journal/socket \
     --name "$name" --log-opt "tag=$name" "$full_name:stable" > /dev/null

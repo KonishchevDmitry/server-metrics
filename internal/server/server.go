@@ -8,11 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	logging "github.com/KonishchevDmitry/go-easy-logging"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
-
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 )
 
 func Start(ctx context.Context) error {

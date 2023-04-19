@@ -12,4 +12,5 @@ docker run --rm --pid host --network host --read-only \
     --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
     --mount type=bind,src=/sys/fs/cgroup,dst=/sys/fs/cgroup,readonly \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+    --mount type=bind,src=/run/systemd/journal/socket,dst=/run/systemd/journal/socket \
     konishchev/server-metrics --devel "$@"

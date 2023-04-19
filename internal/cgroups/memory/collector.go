@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"strings"
 
+	logging "github.com/KonishchevDmitry/go-easy-logging"
 	"github.com/pkg/math"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 

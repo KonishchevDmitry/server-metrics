@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	logging "github.com/KonishchevDmitry/go-easy-logging"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
@@ -15,7 +16,6 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cpu"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/io"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/memory"
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 

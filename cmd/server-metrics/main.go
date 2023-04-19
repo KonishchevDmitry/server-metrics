@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	logging "github.com/KonishchevDmitry/go-easy-logging"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 
@@ -13,7 +14,7 @@ import (
 	cgroupscollector "github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/kernel"
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 	"github.com/KonishchevDmitry/server-metrics/internal/network"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
@@ -50,12 +51,19 @@ func execute(cmd *cobra.Command) error {
 		return err
 	}
 
-	logger, err := logging.Configure(develMode)
+	logger, err := logging.Configure(logging.Config{
+		Daemon:           !develMode,
+		ShowLevel:        develMode,
+		SyslogIdentifier: "server-metrics",
+		OnError:          metrics.ErrorsMetric.Inc,
+	})
 	if err != nil {
 		return err
 	}
 	defer func() {
-		_ = logger.Sync() // Always fails to sync stderr
+		if err := logger.Sync(); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Failed to flush the logger: %s.\n", err)
+		}
 	}()
 	ctx := logging.WithLogger(context.Background(), logger)
 

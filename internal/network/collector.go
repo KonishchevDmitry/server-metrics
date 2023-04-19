@@ -9,13 +9,13 @@ import (
 	"strings"
 	"sync"
 
+	logging "github.com/KonishchevDmitry/go-easy-logging"
 	"github.com/google/nftables"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/samber/mo"
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 

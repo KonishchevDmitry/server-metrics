@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/logging"
+	logging "github.com/KonishchevDmitry/go-easy-logging"
 )
 
 type deviceResolver struct {
