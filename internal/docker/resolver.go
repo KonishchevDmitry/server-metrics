@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/docker/docker/client"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 type Resolver interface {
@@ -21,14 +21,14 @@ type Container struct {
 
 type resolver struct {
 	lock   sync.Mutex
-	cache  *lru.Cache
+	cache  *lru.Cache[string, Container]
 	client *client.Client
 }
 
 var _ Resolver = &resolver{}
 
 func NewResolver() Resolver {
-	cache, err := lru.New(10)
+	cache, err := lru.New[string, Container](10)
 	if err != nil {
 		panic(err)
 	}
@@ -37,7 +37,7 @@ func NewResolver() Resolver {
 
 func (r *resolver) Resolve(ctx context.Context, id string) (Container, error) {
 	if container, ok := r.cache.Get(id); ok {
-		return container.(Container), nil
+		return container, nil
 	}
 
 	cli, err := r.getClient()

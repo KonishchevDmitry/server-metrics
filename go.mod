@@ -3,10 +3,11 @@ module github.com/KonishchevDmitry/server-metrics
 go 1.19
 
 require (
+	github.com/KonishchevDmitry/go-easy-logging v0.0.0-20230419060859-36b858d1c8a6
 	github.com/MakeNowJust/heredoc v1.0.0
 	github.com/docker/docker v23.0.4+incompatible
 	github.com/google/nftables v0.1.0
-	github.com/hashicorp/golang-lru v1.0.1
+	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/hnlq715/golang-lru v0.3.1
 	github.com/pkg/math v0.0.0-20141027224758-f2ed9e40e245
 	github.com/prometheus/client_golang v1.15.0
@@ -21,8 +22,6 @@ require (
 )
 
 require (
-	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
-	github.com/KonishchevDmitry/go-easy-logging v0.0.0-20230419054252-2b38badf4ca3 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
@@ -43,7 +42,7 @@ require (
 	github.com/moby/term v0.0.0-20221205130635-1aeaba878587 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/image-spec v1.1.0-rc2 // indirect
+	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
@@ -51,9 +50,7 @@ require (
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/objx v0.5.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	go.uber.org/goleak v1.2.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
