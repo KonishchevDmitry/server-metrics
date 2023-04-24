@@ -3,7 +3,7 @@ module github.com/KonishchevDmitry/server-metrics
 go 1.19
 
 require (
-	github.com/KonishchevDmitry/go-easy-logging v0.0.0-20230419060859-36b858d1c8a6
+	github.com/KonishchevDmitry/go-easy-logging v0.0.0-20230419175548-32cfd9299051
 	github.com/MakeNowJust/heredoc v1.0.0
 	github.com/docker/docker v23.0.4+incompatible
 	github.com/google/nftables v0.1.0
@@ -15,7 +15,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.2
 	go.uber.org/zap v1.24.0
-	golang.org/x/exp v0.0.0-20230418202329-0354be287a23
+	golang.org/x/exp v0.0.0-20230420155640-133eef4313cb
 	golang.org/x/sys v0.7.0
 	golang.org/x/text v0.9.0
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2

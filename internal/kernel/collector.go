@@ -1,7 +1,6 @@
 package kernel
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -21,7 +20,7 @@ type Collector struct {
 	newMessages  chan logEntry
 	messageGroup []logEntry
 	waitGroup    util.WaitGroup
-	errors       *errorMetrics
+	errors       *prometheus.CounterVec
 }
 
 var _ prometheus.Collector = &Collector{}
@@ -37,7 +36,7 @@ func NewCollector(ctx context.Context) (*Collector, error) {
 	c := &Collector{
 		kmsg:        kmsg,
 		newMessages: make(chan logEntry),
-		errors:      newErrorMetrics(),
+		errors:      newErrorsMetric(),
 	}
 	c.waitGroup.Run(func() {
 		defer close(c.newMessages)
@@ -53,11 +52,11 @@ func NewCollector(ctx context.Context) (*Collector, error) {
 }
 
 func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
-	c.errors.metric.Describe(descs)
+	c.errors.Describe(descs)
 }
 
 func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
-	c.errors.metric.Collect(metrics)
+	c.errors.Collect(metrics)
 }
 
 func (c *Collector) logReader(ctx context.Context) error {
@@ -170,17 +169,15 @@ func (c *Collector) processGroup(ctx context.Context) {
 		return
 	}
 
-	var buf bytes.Buffer
-	for index, entry := range c.messageGroup {
-		if index != 0 {
-			buf.WriteByte('\n')
-		}
-		buf.WriteString(entry.message)
+	var messages []string
+	for _, entry := range c.messageGroup {
+		messages = append(messages, entry.message)
 	}
 	c.messageGroup = c.messageGroup[:0]
 
-	c.errors.unknown.Inc()
-	logging.L(ctx).Warnf("Got a kernel error:\n%s", buf.String())
+	for _, errorType := range classify(ctx, messages) {
+		c.errors.WithLabelValues(string(errorType)).Inc()
+	}
 }
 
 func (c *Collector) Close(ctx context.Context) {

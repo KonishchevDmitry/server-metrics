@@ -6,12 +6,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 )
 
-type errorMetrics struct {
-	metric  *prometheus.CounterVec
-	unknown prometheus.Counter
-}
-
-func newErrorMetrics() *errorMetrics {
+func newErrorsMetric() *prometheus.CounterVec {
 	metric := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: "kernel",
@@ -19,8 +14,10 @@ func newErrorMetrics() *errorMetrics {
 		Help:      "Count of kernel errors in /dev/kmsg.",
 	}, []string{"type"})
 
-	return &errorMetrics{
-		metric:  metric,
-		unknown: metric.WithLabelValues("unknown"),
+	// Fill labels with zero values
+	for _, errorType := range errorTypes {
+		metric.WithLabelValues(string(errorType))
 	}
+
+	return metric
 }
