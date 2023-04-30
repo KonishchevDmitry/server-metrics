@@ -1,11 +1,15 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"strings"
+	"syscall"
 	"time"
 
 	logging "github.com/KonishchevDmitry/go-easy-logging"
@@ -54,12 +58,17 @@ func (l prometheusLogger) Println(v ...interface{}) {
 
 	for _, value := range v {
 		if err, ok := value.(error); ok {
-			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			var netErr *net.OpError
+			if errors.As(err, &netErr) && netErr.Op == "write" && (netErr.Timeout() || errors.Is(netErr.Err, syscall.EPIPE)) ||
+				errors.Is(err, context.Canceled) {
 				logger = l.logger.Infof
 			}
 			break
 		}
 	}
 
-	logger("Prometheus: %s.", fmt.Sprint(v...))
+	var buf bytes.Buffer
+	_, _ = fmt.Fprintln(&buf, v...)
+
+	logger("Prometheus: %s.", strings.TrimRight(buf.String(), "\n"))
 }
