@@ -2,8 +2,6 @@ package kernel
 
 import (
 	"context"
-	"fmt"
-	"regexp"
 	"strings"
 
 	logging "github.com/KonishchevDmitry/go-easy-logging"
@@ -12,10 +10,23 @@ import (
 type errorType string
 
 const (
-	errorTypeUnknown errorType = "unknown"
+	errorTypeUnknown       errorType = "unknown"
+	errorTypeUnexpectedNMI errorType = "unexpected-nmi"
 )
 
-var errorTypes = []errorType{errorTypeUnknown}
+var errorTypes = []errorType{
+	errorTypeUnknown,
+	errorTypeUnexpectedNMI,
+}
+
+type errorMatcher interface {
+	match(ctx context.Context, messages []string) (int, []errorType)
+}
+
+var errorMatchers = []errorMatcher{
+	newAMDIOMMUErrorMatcher(),
+	newUnexpectedNMIErrorMatcher(),
+}
 
 func classify(ctx context.Context, messages []string) []errorType {
 	var errors []errorType
@@ -34,34 +45,24 @@ func classify(ctx context.Context, messages []string) []errorType {
 		}
 	}
 
+MessageLoop:
 	for index < len(messages) {
-		message := messages[index]
+		toMatch := messages[index:]
 
-		if matches := amdIOMMUError.FindStringSubmatch(message); len(matches) != 0 {
-			consumeUnknown()
-			consume(handleAMDIOMMUError(ctx, messages, matches))
-		} else {
-			index++
+		for _, matcher := range errorMatchers {
+			if count, types := matcher.match(ctx, toMatch); count != 0 {
+				errors = append(errors, types...)
+				consumeUnknown()
+				consume(count)
+				continue MessageLoop
+			}
 		}
+
+		index++
 	}
 
 	consumeUnknown()
 	return errors
-}
-
-var amdIOMMUError = regexp.MustCompile(`^kfd kfd: amdgpu: Failed to resume IOMMU for device ([a-f0-9:]+)$`)
-
-// HP Proliant MicroServer Gen10 has a numerous bugs in IOMMU support. Ignore complains on them.
-func handleAMDIOMMUError(ctx context.Context, messages []string, matches []string) int {
-	count := 1
-
-	expectedNext := fmt.Sprintf("kfd kfd: amdgpu: device %s NOT added due to errors", matches[1])
-	if len(messages) > count && messages[count] == expectedNext {
-		count++
-	}
-
-	logging.L(ctx).Infof("Ignoring IOMMU errors:\n%s", formatMessages(messages[:count]))
-	return count
 }
 
 func formatMessages(messages []string) string {
