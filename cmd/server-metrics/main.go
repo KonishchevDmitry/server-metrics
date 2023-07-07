@@ -9,6 +9,7 @@ import (
 	logging "github.com/KonishchevDmitry/go-easy-logging"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap/zapcore"
 
 	cgroupclassifier "github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
 	cgroupscollector "github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
@@ -51,8 +52,14 @@ func execute(cmd *cobra.Command) error {
 		return err
 	}
 
+	logLevel := zapcore.InfoLevel
+	if develMode {
+		logLevel = zapcore.DebugLevel
+	}
+
 	logger, err := logging.Configure(logging.Config{
 		Daemon:           !develMode,
+		Level:            logLevel,
 		ShowLevel:        develMode,
 		SyslogIdentifier: "server-metrics",
 		OnError:          metrics.ErrorsMetric.Inc,
