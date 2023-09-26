@@ -113,6 +113,7 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 
 		// /user.slice/user-1000.slice/user@1000.service/app.slice/*
 		// /user.slice/user-1000.slice/user@1000.service/app.slice/app-*.slice/*
+		// /user.slice/user-1000.slice/user@1000.service/app.slice/snap.*.*-*.scope
 		// /user.slice/user-1000.slice/user@1000.service/session.slice/*
 		// /user.slice/user-1000.slice/user@1000.service/session.slice/session-*.slice/*
 		if classification, ok, err := c.classifyServiceSliceChild(ctx, user, child); err != nil || ok {
@@ -132,6 +133,10 @@ func (c *Classifier) classifySupplementaryChild(context classifyContext, name st
 	}
 	return Classification{}, false, nil
 }
+
+const uuidRegex = `[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`
+
+var snapScopeNameRegex = regexp.MustCompile(`^snap\.[^.]+\.([^.]+)-` + uuidRegex + `\.scope$`)
 
 func (c *Classifier) classifyServiceSliceChild(ctx context.Context, context classifyContext, name string) (
 	Classification, bool, error,
@@ -168,6 +173,10 @@ func (c *Classifier) classifyServiceSliceChild(ctx context.Context, context clas
 	dockerBuilderPrefix := fmt.Sprintf("%s.slice:docker:", context.slice)
 	if strings.HasPrefix(name, dockerBuilderPrefix) && path.Ext(name[len(dockerBuilderPrefix):]) == "" {
 		return context.classify("docker-builder")
+	}
+
+	if match := snapScopeNameRegex.FindStringSubmatch(name); len(match) != 0 {
+		return context.classify(match[1])
 	}
 
 	return Classification{}, false, nil

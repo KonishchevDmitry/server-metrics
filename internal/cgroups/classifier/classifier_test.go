@@ -41,6 +41,7 @@ func TestClassifier(t *testing.T) {
 		{"/system.slice/docker-3413aa74fd2ff75f15b32438dce58a63b73bc04c4bd476ca7ab54c12da6a43d4.scope", "server-metrics", nil},
 		{"/system.slice/docker-89eae77df5fb5de73ccc3eff21cd7f1c72434fef6ade1328924315ebe7eeadd5.scope", "docker-containers", nil},
 		{"/system.slice/nginx.service", "nginx", nil},
+		{"/system.slice/snap.shadowsocks-rust.ssserver-daemon-b5bad6a9-8ff1-4730-9f03-83b9d5998ddd.scope", "ssserver-daemon", nil},
 		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", nil},
 		{"/system.slice/system-openvpn\\x2dserver.slice", "", nil},
 		{"/system.slice/system-openvpn\\x2dserver.slice/openvpn-server@proxy.service", "openvpn-server@proxy", nil},
@@ -56,6 +57,8 @@ func TestClassifier(t *testing.T) {
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/app-vm.slice", "", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/app-vm.slice/vm@linux.service", "dmitry/vm@linux", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/ssh-agent.service", "dmitry/ssh-agent", nil},
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/snap.go.go-345c278e-7032-498e-8348-5c092e5d3623.scope", "dmitry/go", nil},
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/snap.shadowsocks-rust.ssserver-6f2a6b45-86b0-43fc-944f-d367b51e6c2f.scope", "dmitry/ssserver", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/session.slice", "", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/session.slice/dbus.service", "dmitry/dbus", nil},
 	} {
