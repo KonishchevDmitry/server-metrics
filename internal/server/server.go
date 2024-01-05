@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func Start(ctx context.Context) error {
+func Start(ctx context.Context, bindAddress string) error {
 	http.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{
 		ErrorLog:            prometheusLogger{logger: logging.L(ctx)},
 		DisableCompression:  true,
@@ -26,7 +26,7 @@ func Start(ctx context.Context) error {
 	}))
 
 	server := http.Server{
-		Addr:         "127.0.0.1:9101",
+		Addr:         bindAddress,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		ErrorLog:     log.New(httpLogger{logger: logging.L(ctx)}, "", 0),

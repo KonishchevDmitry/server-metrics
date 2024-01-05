@@ -41,6 +41,7 @@ func run() error {
 
 	flags := cmd.Flags()
 	flags.Bool("devel", false, "print discovered metrics and exit")
+	flags.String("bind-address", "127.0.0.1:9101", "address to bind to")
 	flags.Bool("no-network-collector", false, "disable network collector")
 
 	return cmd.Execute()
@@ -50,6 +51,11 @@ func execute(cmd *cobra.Command) error {
 	flags := cmd.Flags()
 
 	develMode, err := flags.GetBool("devel")
+	if err != nil {
+		return err
+	}
+
+	bindAddress, err := flags.GetString("bind-address")
 	if err != nil {
 		return err
 	}
@@ -137,7 +143,7 @@ func execute(cmd *cobra.Command) error {
 		return nil
 	}
 
-	return server.Start(ctx)
+	return server.Start(ctx, bindAddress)
 }
 
 func main() {
