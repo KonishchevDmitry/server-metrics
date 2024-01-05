@@ -39,7 +39,9 @@ func run() error {
 		},
 	}
 
-	cmd.Flags().Bool("devel", false, "print discovered metrics and exit")
+	flags := cmd.Flags()
+	flags.Bool("devel", false, "print discovered metrics and exit")
+	flags.Bool("no-network-collector", false, "disable network collector")
 
 	return cmd.Execute()
 }
@@ -48,6 +50,11 @@ func execute(cmd *cobra.Command) error {
 	flags := cmd.Flags()
 
 	develMode, err := flags.GetBool("devel")
+	if err != nil {
+		return err
+	}
+
+	withoutNetworkCollector, err := flags.GetBool("no-network-collector")
 	if err != nil {
 		return err
 	}
@@ -75,6 +82,7 @@ func execute(cmd *cobra.Command) error {
 	ctx := logging.WithLogger(context.Background(), logger)
 
 	registry := prometheus.DefaultRegisterer
+	gatherer := prometheus.DefaultGatherer
 
 	kernelCollector, err := kernel.NewCollector(ctx)
 	if err != nil {
@@ -100,36 +108,31 @@ func execute(cmd *cobra.Command) error {
 		return err
 	}
 
-	networkCollector, err := network.NewCollector(logger, develMode)
-	if err != nil {
-		return err
-	}
-	defer networkCollector.Close(ctx)
+	if !withoutNetworkCollector {
+		networkCollector, err := network.NewCollector(logger, develMode)
+		if err != nil {
+			return err
+		}
+		defer networkCollector.Close(ctx)
 
-	if err := registry.Register(networkCollector); err != nil {
-		return err
-	}
-
-	collect := func() {
-		metrics := make(chan prometheus.Metric)
-
-		go func() {
-			defer close(metrics)
-			cgroupsCollector.Collect(metrics)
-			networkCollector.Collect(metrics)
-		}()
-
-		for range metrics {
+		if err := registry.Register(networkCollector); err != nil {
+			return err
 		}
 	}
 
 	if develMode {
 		logger.Info("Running in devel mode.")
 
-		collect()
+		if _, err := gatherer.Gather(); err != nil {
+			return err
+		}
+
 		logger.Info("Sleeping...")
 		time.Sleep(5 * time.Second)
-		collect()
+
+		if _, err := gatherer.Gather(); err != nil {
+			return err
+		}
 
 		return nil
 	}
