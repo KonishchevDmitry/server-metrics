@@ -67,7 +67,7 @@ func (c *Collector) observe(ctx context.Context, metrics chan<- prometheus.Metri
 	}
 
 	kworkers := make(map[int]uint64)
-	names := map[string]struct{}{kworkersName: struct{}{}}
+	names := map[string]struct{}{kworkersName: {}}
 
 	logging.L(ctx).Debugf("Kernel CPU usage:")
 
