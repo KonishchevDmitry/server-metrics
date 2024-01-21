@@ -55,28 +55,34 @@ func (g *Group) Children() ([]*Group, bool, error) {
 	return children, true, nil
 }
 
-func (g *Group) HasProcesses() (bool, bool, error) {
-	var hasProcesses bool
+func (g *Group) PIDs() ([]int, bool, error) {
+	var pids []int
 
 	if exists, err := g.ReadProperty("cgroup.procs", func(file io.Reader) error {
 		return util.ParseFile(file, func(line string) error {
-			if _, err := strconv.ParseInt(line, 10, 32); err != nil {
+			pid, err := strconv.ParseInt(line, 10, 32)
+			if err != nil || pid <= 0 {
 				return fmt.Errorf("PID is expected, but got %q line", line)
 			}
-			hasProcesses = true
+			pids = append(pids, int(pid))
 			return nil
 		})
 	}); err != nil {
 		if errors.Is(err, syscall.EOPNOTSUPP) {
 			// cgroup.type == threaded
-			return false, true, nil
+			return nil, true, nil
 		}
-		return false, false, err
+		return nil, false, err
 	} else if !exists {
-		return false, false, nil
+		return nil, false, nil
 	}
 
-	return hasProcesses, true, nil
+	return pids, true, nil
+}
+
+func (g *Group) HasProcesses() (bool, bool, error) {
+	pids, exists, err := g.PIDs()
+	return len(pids) != 0, exists, err
 }
 
 func (g *Group) ReadProperty(name string, reader func(file io.Reader) error) (bool, error) {

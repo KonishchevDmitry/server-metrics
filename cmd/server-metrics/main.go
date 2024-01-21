@@ -15,6 +15,7 @@ import (
 	cgroupscollector "github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/kernel"
+	"github.com/KonishchevDmitry/server-metrics/internal/kernelprocs"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 	"github.com/KonishchevDmitry/server-metrics/internal/network"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
@@ -87,8 +88,11 @@ func execute(cmd *cobra.Command) error {
 	}()
 	ctx := logging.WithLogger(context.Background(), logger)
 
-	registry := prometheus.DefaultRegisterer
-	gatherer := prometheus.DefaultGatherer
+	var collectors []prometheus.Collector
+	register := func(collector prometheus.Collector) error {
+		collectors = append(collectors, collector)
+		return prometheus.DefaultRegisterer.Register(collector)
+	}
 
 	kernelCollector, err := kernel.NewCollector(ctx)
 	if err != nil {
@@ -96,7 +100,7 @@ func execute(cmd *cobra.Command) error {
 	}
 	defer kernelCollector.Close(ctx)
 
-	if err := registry.Register(kernelCollector); err != nil {
+	if err := register(kernelCollector); err != nil {
 		return err
 	}
 
@@ -110,7 +114,16 @@ func execute(cmd *cobra.Command) error {
 	cgroupClassifier := cgroupclassifier.New(users.NewResolver(), dockerResolver)
 
 	cgroupsCollector := cgroupscollector.NewCollector(logger, cgroupClassifier)
-	if err := registry.Register(cgroupsCollector); err != nil {
+	if err := register(cgroupsCollector); err != nil {
+		return err
+	}
+
+	kernelProcessesCollector, err := kernelprocs.NewCollector(logger)
+	if err != nil {
+		return err
+	}
+
+	if err := register(kernelProcessesCollector); err != nil {
 		return err
 	}
 
@@ -121,24 +134,32 @@ func execute(cmd *cobra.Command) error {
 		}
 		defer networkCollector.Close(ctx)
 
-		if err := registry.Register(networkCollector); err != nil {
+		if err := register(networkCollector); err != nil {
 			return err
 		}
 	}
 
 	if develMode {
+		collect := func() {
+			metrics := make(chan prometheus.Metric)
+
+			go func() {
+				defer close(metrics)
+				for _, collector := range collectors {
+					collector.Collect(metrics)
+				}
+			}()
+
+			for range metrics {
+			}
+		}
+
 		logger.Info("Running in devel mode.")
 
-		if _, err := gatherer.Gather(); err != nil {
-			return err
-		}
-
+		collect()
 		logger.Info("Sleeping...")
 		time.Sleep(5 * time.Second)
-
-		if _, err := gatherer.Gather(); err != nil {
-			return err
-		}
+		collect()
 
 		return nil
 	}
