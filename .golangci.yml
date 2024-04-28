@@ -28,6 +28,7 @@ linters:
     - nonamedreturns
     - nosnakecase
     - paralleltest
+    - perfsprint
     - prealloc
     - testpackage
     - varnamelen
