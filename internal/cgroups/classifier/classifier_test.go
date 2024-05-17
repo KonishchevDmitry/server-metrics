@@ -49,8 +49,8 @@ func TestClassifier(t *testing.T) {
 		{"/system.slice/systemd-journald-dev-log.socket", "systemd-journald-dev-log.socket", nil},
 
 		{"/user.slice", "", nil},
-		{"/user.slice/user-1000.slice", "dmitry", []string{"user@1000.service"}},
-		{"/user.slice/user-1000.slice/user@1000.service", "dmitry", nil},
+		{"/user.slice/user-1000.slice", "dmitry/sessions", []string{"user@1000.service"}},
+		{"/user.slice/user-1000.slice/user@1000.service", "dmitry", []string{"app.slice", "init.scope"}},
 		{"/user.slice/user-1000.slice/user@1000.service/init.scope", "dmitry/init", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice", "", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/dbus.socket", "dmitry/dbus.socket", nil},

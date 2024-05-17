@@ -87,20 +87,31 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 
 		// /user.slice/user-1000.slice
 		if match[1] == "" {
-			return system.classifyTotal(userName, systemdUserServiceName)
+			// The group contains:
+			// * user@1000.service - systemd user session
+			// * session-*.scope - each ssh/mosh connection is assigned to a session
+			return system.classifyTotal(userName+"/sessions", systemdUserServiceName)
 		}
 
 		user := classifyContext{slice: "app", prefix: userName + "/"}
 
 		// /user.slice/user-1000.slice/*
 		if match[3] == "" {
-			if child == systemdUserServiceName {
-				return Classification{
-					Service:         userName,
-					SystemdUserRoot: true,
-				}, true, nil
+			if child != systemdUserServiceName {
+				return Classification{}, false, nil
 			}
-			return Classification{}, false, nil
+
+			// user@1000.service contains:
+			// * init.scope - systemd
+			// * app.slice - services
+			// * tmux-spawn-2c342f76-8d5b-4046-919e-b14ed5265ad2.scope – each tmux window runs in a separate scope
+
+			return Classification{
+				Service:              userName,
+				SystemdUserRoot:      true,
+				TotalCollection:      true,
+				TotalExcludeChildren: []string{"app.slice", "init.scope"},
+			}, true, nil
 		}
 
 		// /user.slice/user-1000.slice/user@1000.service/*
