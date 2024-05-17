@@ -25,6 +25,7 @@ type errorMatcher interface {
 
 var errorMatchers = []errorMatcher{
 	newAMDIOMMUErrorMatcher(),
+	newUBSANErrorMatcher(),
 	newUnexpectedNMIErrorMatcher(),
 }
 

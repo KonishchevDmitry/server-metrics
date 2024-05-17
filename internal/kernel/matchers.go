@@ -37,6 +37,30 @@ func (e *amdIOMMUErrorMatcher) match(ctx context.Context, messages []string) (in
 	return count, nil
 }
 
+type ubsanErrorMatcher struct {
+	indexOutOfRangeRegexp *regexp.Regexp
+}
+
+func newUBSANErrorMatcher() *ubsanErrorMatcher {
+	return &ubsanErrorMatcher{regexp.MustCompile(
+		`^index \d+ is out of range for type '[^']+'$`,
+	)}
+}
+
+func (e *ubsanErrorMatcher) match(ctx context.Context, messages []string) (int, []errorType) {
+	if !strings.HasPrefix(messages[0], "UBSAN: array-index-out-of-bounds in ") {
+		return 0, nil
+	}
+
+	count := 1
+	if len(messages) > count && len(e.indexOutOfRangeRegexp.FindStringSubmatch(messages[count])) != 0 {
+		count++
+	}
+
+	logging.L(ctx).Infof("Ignoring UBSAN errors:\n%s", formatMessages(messages[:count]))
+	return count, nil
+}
+
 type unexpectedNMIErrorMatcher struct {
 }
 
