@@ -129,9 +129,11 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 }
 
 func (c *Collector) collectRoot(group *cgroups.Group, totalUsage Usage, children []*cgroups.Group) (Usage, bool, error) {
-	current := make(map[string]*rootUsage, len(totalUsage))
+	isRoot := group.IsRoot()
+
+	currentUsage := make(map[string]*rootUsage, len(totalUsage))
 	for device, usage := range totalUsage {
-		current[device] = &rootUsage{root: *usage}
+		currentUsage[device] = &rootUsage{root: *usage}
 	}
 
 	for _, child := range children {
@@ -143,7 +145,7 @@ func (c *Collector) collectRoot(group *cgroups.Group, totalUsage Usage, children
 		}
 
 		if !childExists {
-			if group.IsRoot() {
+			if isRoot {
 				return Usage{}, false, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
 			}
 
@@ -162,43 +164,64 @@ func (c *Collector) collectRoot(group *cgroups.Group, totalUsage Usage, children
 		}
 
 		for device, usage := range childUsage {
-			total, ok := current[device]
+			total, ok := currentUsage[device]
 			if !ok {
 				total = &rootUsage{}
-				current[device] = total
+				currentUsage[device] = total
 			}
 			cgroups.AddUsage(&total.children, usage)
+		}
+
+	}
+
+	var currentChildren map[string]struct{}
+	if isRoot {
+		currentChildren = make(map[string]struct{}, len(children))
+		for _, child := range children {
+			currentChildren[child.Name] = struct{}{}
 		}
 	}
 
 	state, ok := c.roots[group.Name]
-	if ok && state.lastUsage != nil {
-		for device, current := range current {
-			last, ok := state.lastUsage[device]
-			if !ok {
-				last = &rootUsage{}
-			}
-
-			netRootUsage, ok := state.netUsage[device]
-			if !ok {
-				netRootUsage = &deviceUsage{}
-				state.netUsage[device] = netRootUsage
-			}
-
-			if err := cgroups.CalculateRootGroupUsage(netRootUsage, current, last); err != nil {
-				state.lastUsage = nil
-				return Usage{}, false, err
-			}
+	if !ok {
+		c.roots[group.Name] = &rootState{
+			lastChildren: currentChildren,
+			lastUsage:    currentUsage,
+			netUsage:     make(Usage),
+			collected:    true,
 		}
-	} else if ok {
-		// We decided to forget last usage on previous call, so just obtain a new one
-	} else {
-		state = &rootState{netUsage: make(Usage)}
-		c.roots[group.Name] = state
+		return nil, true, nil
 	}
 
-	state.lastUsage = current
+	lastChildren, lastUsage := state.lastChildren, state.lastUsage
+	state.lastChildren = currentChildren
+	state.lastUsage = currentUsage
 	state.collected = true
+
+	if isRoot {
+		for name := range lastChildren {
+			if _, ok := currentChildren[name]; !ok {
+				return Usage{}, false, fmt.Errorf("%q has been deleted between metrics collection", name)
+			}
+		}
+	}
+
+	for device, current := range currentUsage {
+		last, ok := lastUsage[device]
+		if !ok {
+			last = &rootUsage{}
+		}
+
+		netRootUsage, ok := state.netUsage[device]
+		if !ok {
+			netRootUsage = &deviceUsage{}
+			state.netUsage[device] = netRootUsage
+		}
+
+		if err := cgroups.CalculateRootGroupUsage(netRootUsage, current, last); err != nil {
+			return Usage{}, false, fmt.Errorf("%s device: %w", device, err)
+		}
+	}
 
 	return state.netUsage, true, nil
 }
@@ -253,7 +276,8 @@ func (u *rootUsage) ToRootUsage() (cgroups.ToUsage, cgroups.ToUsage) {
 }
 
 type rootState struct {
-	lastUsage map[string]*rootUsage
-	netUsage  Usage
-	collected bool
+	lastChildren map[string]struct{}
+	lastUsage    map[string]*rootUsage
+	netUsage     Usage
+	collected    bool
 }
