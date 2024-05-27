@@ -25,10 +25,7 @@ func (r *deviceResolver) getDeviceName(ctx context.Context, device string) strin
 		return name
 	}
 
-	name, err := os.Readlink(path.Join("/dev/char", device))
-	if err != nil && os.IsNotExist(err) {
-		name, err = os.Readlink(path.Join("/dev/block", device))
-	}
+	name, err := os.Readlink(path.Join("/dev/block", device))
 	if err == nil {
 		name = path.Base(name)
 	} else {

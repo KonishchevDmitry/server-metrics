@@ -3,6 +3,7 @@ package io
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	logging "github.com/KonishchevDmitry/go-easy-logging"
 	"github.com/prometheus/client_golang/prometheus"
@@ -102,7 +103,10 @@ func (c *Collector) collect(group *cgroups.Group) (Usage, bool, error) {
 	usage := make(Usage, len(stats))
 
 	for device, stat := range stats {
-		stat := stat
+		// Skip all loop devices since they aren't interesting for us and temporary by their nature
+		if strings.HasPrefix(device, "7:") {
+			continue
+		}
 
 		var keyErr error
 		get := func(name string) int64 {
