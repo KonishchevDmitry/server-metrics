@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	logging "github.com/KonishchevDmitry/go-easy-logging"
 	"github.com/prometheus/client_golang/prometheus"
@@ -81,14 +82,21 @@ func (c *Collector) observe(ctx context.Context, metrics chan<- prometheus.Metri
 
 		data, err := os.ReadFile(path)
 		if err != nil {
-			if !os.IsNotExist(err) {
+			var errno syscall.Errno
+			if !errors.As(err, &errno) {
 				return err
 			}
 
-			if _, err := os.Stat("/proc/self/stat"); err != nil {
-				if os.IsNotExist(err) {
-					return errors.New("/proc is not mounted")
+			switch errno {
+			case syscall.ESRCH:
+			case syscall.ENOENT:
+				if _, err := os.Stat("/proc/self/stat"); err != nil {
+					if os.IsNotExist(err) {
+						return errors.New("/proc is not mounted")
+					}
+					return err
 				}
+			default:
 				return err
 			}
 
