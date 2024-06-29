@@ -175,7 +175,6 @@ func (c *Collector) collectRoot(group *cgroups.Group, totalUsage Usage, children
 			}
 			cgroups.AddUsage(&total.children, usage)
 		}
-
 	}
 
 	var currentChildren map[string]struct{}

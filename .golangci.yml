@@ -6,6 +6,8 @@ linters:
   disable:
     - cyclop
     - depguard
+    - err113
+    - exhaustive
     - exhaustivestruct
     - exhaustruct
     - funlen
@@ -23,6 +25,7 @@ linters:
     - ireturn
     - lll
     - maintidx
+    - mnd
     - nestif
     - nlreturn
     - nonamedreturns
