@@ -107,8 +107,6 @@ func (c *Collector) collectRoot(group *cgroups.Group, usage Usage, children []*c
 	current := rootUsage{root: usage}
 
 	for _, child := range children {
-		child := child
-
 		childUsage, childExists, err := c.collect(child)
 		if err != nil {
 			return Usage{}, false, err

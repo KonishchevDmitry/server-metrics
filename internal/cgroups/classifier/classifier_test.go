@@ -62,7 +62,6 @@ func TestClassifier(t *testing.T) {
 		{"/user.slice/user-1000.slice/user@1000.service/session.slice", "", nil},
 		{"/user.slice/user-1000.slice/user@1000.service/session.slice/dbus.service", "dmitry/dbus", nil},
 	} {
-		testCase := testCase
 		t.Run(testCase.group, func(t *testing.T) {
 			classification, ok, err := classifier.ClassifySlice(ctx, testCase.group)
 			require.NoError(t, err)

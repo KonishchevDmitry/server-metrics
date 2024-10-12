@@ -308,8 +308,6 @@ func (c *Collector) collectForwardIPs(ctx context.Context, metrics chan<- promet
 		logging.L(ctx).Debugf("* %s forward connections set size: %d.", family.name, setSize)
 
 		for _, element := range elements {
-			element := element
-
 			if size := len(element.Key); size != int(elementType.Bytes) {
 				return fmt.Errorf(
 					"Got %q set element of an unexpected size: %d vs %d",

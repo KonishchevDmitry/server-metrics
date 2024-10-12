@@ -38,7 +38,6 @@ func TestClassify(t *testing.T) {
 	}}
 
 	for _, c := range tests {
-		c := c
 		t.Run(c.name, func(t *testing.T) {
 			result := classify(ctx, c.messages)
 			require.Equal(t, c.result, result)

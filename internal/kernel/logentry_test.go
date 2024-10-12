@@ -53,7 +53,6 @@ func TestParseLogEntry(t *testing.T) {
 	}
 
 	for _, c := range tests {
-		c := c
 		t.Run(c.name, func(t *testing.T) {
 			entry, ok := parseLogEntry([]byte(c.data))
 			require.True(t, ok)
