@@ -43,10 +43,11 @@ func TestClassifier(t *testing.T) {
 		{"/system.slice/nginx.service", "nginx", nil},
 		{"/system.slice/snap.shadowsocks-rust.ssserver-daemon-b5bad6a9-8ff1-4730-9f03-83b9d5998ddd.scope", "ssserver-daemon", nil},
 		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", nil},
-		{"/system.slice/system-openvpn\\x2dserver.slice", "", nil},
-		{"/system.slice/system-openvpn\\x2dserver.slice/openvpn-server@proxy.service", "openvpn-server@proxy", nil},
+		{`/system.slice/system-openvpn\x2dserver.slice`, "", nil},
+		{`/system.slice/system-openvpn\x2dserver.slice/openvpn-server@proxy.service`, "openvpn-server@proxy", nil},
 		{"/system.slice/systemd-udevd.service", "systemd-udevd", []string{}},
 		{"/system.slice/systemd-journald-dev-log.socket", "systemd-journald-dev-log.socket", nil},
+		{`/system.slice/system-dbus\x2d:1.4\x2dorg.fedoraproject.SetroubleshootPrivileged.slice`, "dbus:org.fedoraproject.SetroubleshootPrivileged", []string{}},
 
 		{"/user.slice", "", nil},
 		{"/user.slice/user-1000.slice", "dmitry/sessions", []string{"user@1000.service"}},

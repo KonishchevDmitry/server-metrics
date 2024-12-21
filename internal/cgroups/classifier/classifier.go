@@ -147,11 +147,23 @@ func (c *Classifier) classifySupplementaryChild(context classifyContext, name st
 
 const uuidRegex = `[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`
 
-var snapScopeNameRegex = regexp.MustCompile(`^snap\.[^.]+\.([^.]+)-` + uuidRegex + `\.scope$`)
+var (
+	dbusActivationRegex = regexp.MustCompile(`^\d+\.\d+-(.+)\.slice$`)
+	snapScopeNameRegex  = regexp.MustCompile(`^snap\.[^.]+\.([^.]+)-` + uuidRegex + `\.scope$`)
+)
 
 func (c *Classifier) classifyServiceSliceChild(ctx context.Context, context classifyContext, name string) (
 	Classification, bool, error,
 ) {
+	// DBus creates a unique unit for each service activation:
+	// /system.slice/system-dbus\x2d:1.4\x2dorg.fedoraproject.SetroubleshootPrivileged.slice/dbus-:1.4-org.fedoraproject.SetroubleshootPrivileged@21.service
+	dbusActivationPrefix := fmt.Sprintf(`%s-dbus-:`, context.slice)
+	if strings.HasPrefix(name, dbusActivationPrefix) {
+		if match := dbusActivationRegex.FindStringSubmatch(name[len(dbusActivationPrefix):]); len(match) != 0 {
+			return context.classifyTotal("dbus:" + match[1])
+		}
+	}
+
 	serviceSuffix := ".service"
 	if strings.HasSuffix(name, serviceSuffix) {
 		service := trim("", name, serviceSuffix)
