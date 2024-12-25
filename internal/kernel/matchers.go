@@ -80,6 +80,23 @@ func (e *hotplugInitializationErrorMatcher) match(ctx context.Context, messages 
 	return count, nil
 }
 
+type missingHardwareWatchdogMatcher struct {
+}
+
+func newMissingHardwareWatchdogMatcher() *missingHardwareWatchdogMatcher {
+	return &missingHardwareWatchdogMatcher{}
+}
+
+func (e *missingHardwareWatchdogMatcher) match(ctx context.Context, messages []string) (int, []errorType) {
+	if messages[0] != "sp5100-tco sp5100-tco: Watchdog hardware is disabled" {
+		return 0, nil
+	}
+
+	count := 1
+	logging.L(ctx).Infof("Ignoring missing hardware watchdog error:\n%s", formatMessages(messages[:count]))
+	return count, nil
+}
+
 type ubsanErrorMatcher struct {
 	indexOutOfRangeRegexp *regexp.Regexp
 }

@@ -31,6 +31,7 @@ type classifier struct {
 func newClassifier(enableAll bool) *classifier {
 	matchers := []errorMatcher{
 		newAMDIOMMUErrorMatcher(),
+		newMissingHardwareWatchdogMatcher(),
 		newUBSANErrorMatcher(),
 		newUnexpectedNMIErrorMatcher(),
 	}

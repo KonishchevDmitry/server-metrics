@@ -25,6 +25,9 @@ func TestClassify(t *testing.T) {
 			kfd kfd: amdgpu: device 1002:9874 NOT added due to errors
 		`),
 	}, {
+		name:     "Missing hardware watchdog",
+		messages: `sp5100-tco sp5100-tco: Watchdog hardware is disabled`,
+	}, {
 		name: "Hotplug initialization",
 		messages: heredoc.Doc(`
 			shpchp 0000:01:00.0: pci_hp_register failed with error -16
