@@ -9,6 +9,7 @@ import (
 	logging "github.com/KonishchevDmitry/go-easy-logging"
 )
 
+// HP Proliant MicroServer Gen10 has a numerous bugs in IOMMU support. Ignore complains on them.
 type amdIOMMUErrorMatcher struct {
 	regexp *regexp.Regexp
 }
@@ -19,7 +20,6 @@ func newAMDIOMMUErrorMatcher() *amdIOMMUErrorMatcher {
 	)}
 }
 
-// HP Proliant MicroServer Gen10 has a numerous bugs in IOMMU support. Ignore complains on them.
 func (e *amdIOMMUErrorMatcher) match(ctx context.Context, messages []string) (int, []errorType) {
 	matches := e.regexp.FindStringSubmatch(messages[0])
 	if len(matches) == 0 {
@@ -34,6 +34,49 @@ func (e *amdIOMMUErrorMatcher) match(ctx context.Context, messages []string) (in
 	}
 
 	logging.L(ctx).Infof("Ignoring IOMMU errors:\n%s", formatMessages(messages[:count]))
+	return count, nil
+}
+
+// Virtualization issues on VPS
+type hotplugInitializationErrorMatcher struct {
+	prefix *regexp.Regexp
+}
+
+func newHotplugInitializationErrorMatcher() *hotplugInitializationErrorMatcher {
+	return &hotplugInitializationErrorMatcher{regexp.MustCompile(`^shpchp \d+:\d+:\d+\.\d+: `)}
+}
+
+func (e *hotplugInitializationErrorMatcher) match(ctx context.Context, messages []string) (int, []errorType) {
+	count := 0
+
+	for {
+		if match := e.prefix.FindStringSubmatch(messages[count]); len(match) == 0 {
+			break
+		} else if message := messages[count][len(match[0]):]; message != "pci_hp_register failed with error -16" {
+			break
+		}
+
+		count++
+		if count == len(messages) {
+			break
+		}
+
+		if match := e.prefix.FindStringSubmatch(messages[count]); len(match) == 0 {
+			break
+		} else if message := messages[count][len(match[0]):]; message != "Slot initialization failed" {
+			break
+		}
+
+		count++
+		if count == len(messages) {
+			break
+		}
+	}
+
+	if count != 0 {
+		logging.L(ctx).Infof("Ignoring device hotplug initialization errors:\n%s", formatMessages(messages[:count]))
+	}
+
 	return count, nil
 }
 

@@ -19,6 +19,7 @@ type Collector struct {
 	kmsg         *os.File
 	newMessages  chan logEntry
 	messageGroup []logEntry
+	classifier   *classifier
 	waitGroup    util.WaitGroup
 	errors       *prometheus.CounterVec
 }
@@ -36,6 +37,7 @@ func NewCollector(ctx context.Context) (*Collector, error) {
 	c := &Collector{
 		kmsg:        kmsg,
 		newMessages: make(chan logEntry),
+		classifier:  newClassifier(false),
 		errors:      newErrorsMetric(),
 	}
 	c.waitGroup.Run(func() {
@@ -175,7 +177,7 @@ func (c *Collector) processGroup(ctx context.Context) {
 	}
 	c.messageGroup = c.messageGroup[:0]
 
-	for _, errorType := range classify(ctx, messages) {
+	for _, errorType := range c.classifier.classify(ctx, messages) {
 		c.errors.WithLabelValues(string(errorType)).Inc()
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	logging "github.com/KonishchevDmitry/go-easy-logging"
+	"github.com/klauspost/cpuid/v2"
 )
 
 type errorType string
@@ -23,13 +24,25 @@ type errorMatcher interface {
 	match(ctx context.Context, messages []string) (int, []errorType)
 }
 
-var errorMatchers = []errorMatcher{
-	newAMDIOMMUErrorMatcher(),
-	newUBSANErrorMatcher(),
-	newUnexpectedNMIErrorMatcher(),
+type classifier struct {
+	matchers []errorMatcher
 }
 
-func classify(ctx context.Context, messages []string) []errorType {
+func newClassifier(enableAll bool) *classifier {
+	matchers := []errorMatcher{
+		newAMDIOMMUErrorMatcher(),
+		newUBSANErrorMatcher(),
+		newUnexpectedNMIErrorMatcher(),
+	}
+
+	if enableAll || cpuid.CPU.Has(cpuid.HYPERVISOR) {
+		matchers = append(matchers, newHotplugInitializationErrorMatcher())
+	}
+
+	return &classifier{matchers: matchers}
+}
+
+func (c *classifier) classify(ctx context.Context, messages []string) []errorType {
 	var errors []errorType
 
 	consume := func(count int) {
@@ -50,7 +63,7 @@ MessageLoop:
 	for index < len(messages) {
 		toMatch := messages[index:]
 
-		for _, matcher := range errorMatchers {
+		for _, matcher := range c.matchers {
 			if count, types := matcher.match(ctx, toMatch); count != 0 {
 				errors = append(errors, types...)
 				consumeUnknown()
