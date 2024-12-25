@@ -120,7 +120,7 @@ func (c *Collector) logProcessor(ctx context.Context) {
 	defer c.processGroup(ctx)
 
 	const maxGroupSize = 100
-	const maxGroupTime = time.Millisecond
+	const maxGroupTime = 10 * time.Millisecond
 
 	for {
 		select {
