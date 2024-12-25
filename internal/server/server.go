@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 	logging "github.com/KonishchevDmitry/go-easy-logging"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sanity-io/litter"
 	"go.uber.org/zap"
 )
 
@@ -54,21 +54,23 @@ type prometheusLogger struct {
 }
 
 func (l prometheusLogger) Println(v ...interface{}) {
-	logger := l.logger.Errorf
+	logger, dump := l.logger.Errorf, true
 
 	for _, value := range v {
 		if err, ok := value.(error); ok {
 			var netErr *net.OpError
-			if errors.As(err, &netErr) && netErr.Op == "write" && (netErr.Timeout() || errors.Is(netErr.Err, syscall.EPIPE)) ||
-				errors.Is(err, context.Canceled) {
-				logger = l.logger.Infof
+			if errors.As(err, &netErr) && netErr.Op == "write" &&
+				(netErr.Timeout() || errors.Is(netErr.Err, syscall.EPIPE)) || errors.Is(err, context.Canceled) {
+				logger, dump = l.logger.Infof, false
 			}
 			break
 		}
 	}
 
-	var buf bytes.Buffer
-	_, _ = fmt.Fprintln(&buf, v...)
+	message := strings.TrimRight(fmt.Sprintf("%v", v), "\n")
+	if dump {
+		message = fmt.Sprintf("%s\n%s", message, litter.Sdump(v))
+	}
 
-	logger("Prometheus: %s.", strings.TrimRight(buf.String(), "\n"))
+	logger("Prometheus: %s", message)
 }
