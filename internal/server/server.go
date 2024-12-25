@@ -21,7 +21,6 @@ import (
 func Start(ctx context.Context, bindAddress string) error {
 	http.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{
 		ErrorLog:            prometheusLogger{logger: logging.L(ctx)},
-		DisableCompression:  true,
 		MaxRequestsInFlight: 2,
 	}))
 
