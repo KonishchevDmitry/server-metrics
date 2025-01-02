@@ -9,8 +9,8 @@ docker run --rm --pid host --network host --read-only \
     --cap-drop all --cap-add NET_ADMIN --cap-add CAP_SYSLOG --security-opt no-new-privileges \
     --device /dev/kmsg:/dev/kmsg \
     --mount type=bind,src=/dev,dst=/dev,readonly \
+    --mount type=bind,src=/sys,dst=/sys,readonly \
     --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
-    --mount type=bind,src=/sys/fs/cgroup,dst=/sys/fs/cgroup,readonly \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
     --mount type=bind,src=/run/systemd/journal/socket,dst=/run/systemd/journal/socket \
     konishchev/server-metrics --devel "$@"

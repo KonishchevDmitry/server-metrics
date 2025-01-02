@@ -20,6 +20,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/network"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
+	"github.com/KonishchevDmitry/server-metrics/internal/zswap"
 )
 
 func run() error {
@@ -101,6 +102,11 @@ func execute(cmd *cobra.Command) error {
 	defer kernelCollector.Close(ctx)
 
 	if err := register(kernelCollector); err != nil {
+		return err
+	}
+
+	zswapCollector := zswap.NewCollector(logger)
+	if err := register(zswapCollector); err != nil {
 		return err
 	}
 
