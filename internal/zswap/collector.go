@@ -120,7 +120,7 @@ func (c *Collector) observe(ctx context.Context, metrics chan<- prometheus.Metri
 	}
 
 	compressionErrors, err := readValue(path.Join(statisticsPath, "reject_compress_fail"))
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) { // Old kernels (Ubuntu 22.04) don't have it
 		return err
 	}
 
