@@ -68,7 +68,7 @@ func (l prometheusLogger) Println(v ...interface{}) {
 
 	message := strings.TrimRight(fmt.Sprintf("%v", v), "\n")
 	if dump {
-		message = fmt.Sprintf("%s\n%s", message, litter.Sdump(v))
+		message = fmt.Sprintf("%s\n%s", message, litter.Sdump(v...))
 	}
 
 	logger("Prometheus: %s", message)
