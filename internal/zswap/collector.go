@@ -82,46 +82,58 @@ func (c *Collector) observe(ctx context.Context, metrics chan<- prometheus.Metri
 		return err
 	}
 
-	poolSize, err := readValue(path.Join(statisticsPath, "pool_total_size"))
-	if err != nil {
-		return err
-	}
+	var (
+		poolSize                 float64
+		storedSize               float64
+		poolLimitHits            float64
+		allocationFailureRejects float64
+		poorCompressionRejects   float64
+		reclaimErrors            float64
+		compressionErrors        float64
+	)
 
-	storedPages, err := readValue(path.Join(statisticsPath, "stored_pages"))
-	if err != nil {
-		return err
-	}
-	storedSize := storedPages * float64(c.pageSize)
+	if enabledValue == 1 {
+		poolSize, err = readValue(path.Join(statisticsPath, "pool_total_size"))
+		if err != nil {
+			return err
+		}
 
-	poolLimitHits, err := readValue(path.Join(statisticsPath, "pool_limit_hit"))
-	if err != nil {
-		return err
-	}
+		storedPages, err := readValue(path.Join(statisticsPath, "stored_pages"))
+		if err != nil {
+			return err
+		}
+		storedSize = storedPages * float64(c.pageSize)
 
-	allocationFailureRejects, err := readValue(path.Join(statisticsPath, "reject_alloc_fail"))
-	if err != nil {
-		return err
-	}
+		poolLimitHits, err = readValue(path.Join(statisticsPath, "pool_limit_hit"))
+		if err != nil {
+			return err
+		}
 
-	kmemcacheRejects, err := readValue(path.Join(statisticsPath, "reject_kmemcache_fail"))
-	if err != nil {
-		return err
-	}
-	allocationFailureRejects += kmemcacheRejects
+		allocationFailureRejects, err = readValue(path.Join(statisticsPath, "reject_alloc_fail"))
+		if err != nil {
+			return err
+		}
 
-	poorCompressionRejects, err := readValue(path.Join(statisticsPath, "reject_compress_poor"))
-	if err != nil {
-		return err
-	}
+		kmemcacheRejects, err := readValue(path.Join(statisticsPath, "reject_kmemcache_fail"))
+		if err != nil {
+			return err
+		}
+		allocationFailureRejects += kmemcacheRejects
 
-	reclaimErrors, err := readValue(path.Join(statisticsPath, "reject_reclaim_fail"))
-	if err != nil {
-		return err
-	}
+		poorCompressionRejects, err = readValue(path.Join(statisticsPath, "reject_compress_poor"))
+		if err != nil {
+			return err
+		}
 
-	compressionErrors, err := readValue(path.Join(statisticsPath, "reject_compress_fail"))
-	if err != nil && !os.IsNotExist(err) { // Old kernels (Ubuntu 22.04) don't have it
-		return err
+		reclaimErrors, err = readValue(path.Join(statisticsPath, "reject_reclaim_fail"))
+		if err != nil {
+			return err
+		}
+
+		compressionErrors, err = readValue(path.Join(statisticsPath, "reject_compress_fail"))
+		if err != nil && !os.IsNotExist(err) { // Old kernels (Ubuntu 22.04) don't have it
+			return err
+		}
 	}
 
 	logging.L(ctx).Debugf("zswap:\n"+
