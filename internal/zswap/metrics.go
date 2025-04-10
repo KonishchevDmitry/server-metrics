@@ -10,16 +10,16 @@ var enabledMetric = metricBuilder.Build(
 	"enabled", "Current zswap status.", []string{"zpool", "compressor"})
 
 var maxPoolPercentMetric = metricBuilder.Build(
-	"max_pool_percent", "The maximum percentage of memory that the compressed pool can occupy", nil)
+	"max_pool_percent", "The maximum percentage of memory that the compressed pool can occupy.", nil)
 
 var poolSizeMetric = metricBuilder.Build(
-	"pool_size", "Current pool size", nil)
+	"pool_size", "Current pool size.", nil)
 
 var storedSizeMetric = metricBuilder.Build(
-	"stored_size", "Amount of data stored in the pool", nil)
+	"stored_size", "Amount of data stored in the pool.", nil)
 
 var compressionRatioMetric = metricBuilder.Build(
-	"compression_ratio", "Current compression ratio", nil)
+	"compression_ratio", "Current compression ratio.", nil)
 
 var rejectsMetric = metricBuilder.Build(
 	"rejects_total", "The reason why page hasn't been saved to cache and was saved to swap (doesn't cover all cases such as accept_threshold_percent and shrinker_enabled).",

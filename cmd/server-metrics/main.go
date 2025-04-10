@@ -19,6 +19,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 	"github.com/KonishchevDmitry/server-metrics/internal/network"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
+	"github.com/KonishchevDmitry/server-metrics/internal/slab"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
 	"github.com/KonishchevDmitry/server-metrics/internal/zswap"
 )
@@ -102,6 +103,11 @@ func execute(cmd *cobra.Command) error {
 	defer kernelCollector.Close(ctx)
 
 	if err := register(kernelCollector); err != nil {
+		return err
+	}
+
+	slabCollector := slab.NewCollector(logger)
+	if err := register(slabCollector); err != nil {
 		return err
 	}
 
