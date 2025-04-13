@@ -62,7 +62,10 @@ func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
 }
 
 func (c *Collector) logReader(ctx context.Context) error {
-	buf := make([]byte, 1024)
+	// https://github.com/torvalds/linux/blob/7cdabafc001202de9984f22c973305f424e0a8b7/kernel/printk/internal.h#L49
+	const maxKmsgMessageSize = 2048
+
+	buf := make([]byte, maxKmsgMessageSize)
 
 	for {
 		size, err := c.kmsg.Read(buf)
