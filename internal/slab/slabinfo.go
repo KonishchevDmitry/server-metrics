@@ -12,7 +12,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
-func ReadSlabInfo() ([]slabInfo, error) {
+func readSlabInfo() ([]slabInfo, error) {
 	path := "/proc/slabinfo"
 
 	var slabs []slabInfo

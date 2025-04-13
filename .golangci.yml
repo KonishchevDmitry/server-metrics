@@ -1,27 +1,23 @@
+version: "2"
 run:
   modules-download-mode: readonly
-
 linters:
-  enable-all: true
+  default: all
   disable:
     - cyclop
     - depguard
     - err113
     - exhaustive
-    - exhaustivestruct
     - exhaustruct
-    - funlen
     - forcetypeassert
+    - funcorder
+    - funlen
     - gochecknoglobals
     - gochecknoinits
+    - gocognit
     - gocyclo
     - godot
     - godox
-    - gci
-    - gocognit
-    - gofumpt
-    - gomnd
-    - ifshort
     - ireturn
     - lll
     - maintidx
@@ -29,7 +25,6 @@ linters:
     - nestif
     - nlreturn
     - nonamedreturns
-    - nosnakecase
     - paralleltest
     - perfsprint
     - prealloc
@@ -37,41 +32,37 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
-
-issues:
-  exclude-rules:
-    - linters:
-        - contextcheck
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+    - linters: [contextcheck]
       text: "Function `[^`]+` should pass the context parameter"
 
-    - linters:
-        - gocritic
+    - linters: [gocritic]
       text: "ifElseChain: rewrite if-else to switch statement"
 
-    - linters:
-        - goerr113
+    - linters: [goerr113]
       text: "err113: do not define dynamic errors, use wrapped static errors instead:"
 
-    - linters:
-        - golint
+    - linters: [golint]
       text: "`if` block ends with a `return` statement, so drop this `else` and outdent its block"
 
-    - linters:
-        - promlinter
+    - linters: [promlinter]
       text: "Error: counter metrics should have \"_total\" suffix"
 
-    - linters:
-        - revive
+    - linters: [revive]
       text: "empty-block: this block is empty, you can remove it"
 
-    - linters:
-        - revive
+    - linters: [revive]
       text: "indent-error-flow: if block ends with a return statement, so drop this else and outdent its block"
 
-    - linters:
-        - revive
+    - linters: [revive]
       text: "unused-parameter: parameter '[^']+' seems to be unused, consider removing or renaming it as _"
 
-    - linters:
-        - stylecheck
+    - linters: [staticcheck, stylecheck]
       text: "ST1005: error strings should not be capitalized"

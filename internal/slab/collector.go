@@ -40,7 +40,7 @@ func (c *Collector) observe(ctx context.Context, metrics chan<- prometheus.Metri
 		reclaimable bool
 	}
 
-	infos, err := ReadSlabInfo()
+	infos, err := readSlabInfo()
 	if err != nil {
 		return err
 	}
