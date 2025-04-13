@@ -4,10 +4,13 @@ go 1.23.0
 
 toolchain go1.24.2
 
+// New docker client is not compatible with old server, so it shouldn't be updated
+replace github.com/docker/docker => github.com/docker/docker v27.4.1+incompatible
+
 require (
 	github.com/KonishchevDmitry/go-easy-logging v0.0.0-20230419175548-32cfd9299051
 	github.com/MakeNowJust/heredoc v1.0.0
-	github.com/docker/docker v27.4.1+incompatible
+	github.com/docker/docker v28.0.4+incompatible
 	github.com/google/nftables v0.3.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/hnlq715/golang-lru v0.4.0
