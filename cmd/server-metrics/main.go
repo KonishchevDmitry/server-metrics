@@ -16,6 +16,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/kernel"
 	"github.com/KonishchevDmitry/server-metrics/internal/kernelprocs"
+	"github.com/KonishchevDmitry/server-metrics/internal/meminfo"
 	"github.com/KonishchevDmitry/server-metrics/internal/metrics"
 	"github.com/KonishchevDmitry/server-metrics/internal/network"
 	"github.com/KonishchevDmitry/server-metrics/internal/server"
@@ -103,6 +104,11 @@ func execute(cmd *cobra.Command) error {
 	defer kernelCollector.Close(ctx)
 
 	if err := register(kernelCollector); err != nil {
+		return err
+	}
+
+	meminfoCollector := meminfo.NewCollector(logger)
+	if err := register(meminfoCollector); err != nil {
 		return err
 	}
 

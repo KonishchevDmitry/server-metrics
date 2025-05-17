@@ -23,3 +23,15 @@ docker run --detach --restart unless-stopped \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
     --mount type=bind,src=/run/systemd/journal/socket,dst=/run/systemd/journal/socket \
     --name "$name" --log-opt "tag=$name" "$full_name:stable" > /dev/null
+
+ssh -t root@server.lan '
+    set -eu
+
+    curl -s http://localhost:9101/metrics | sed -r "
+        /^#/ d
+        s/^(.+) [^ ]+\$/\1/
+        /^server_memory_meminfo/!s/^([^{ ]+).*\$/\1/
+    " | sort -u > /etc/monitoring/metrics-server.dump
+
+    cd /etc/monitoring && git diff metrics-server.dump >&2
+'
