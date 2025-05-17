@@ -13,18 +13,7 @@ import (
 )
 
 func readSlabInfo() ([]slabInfo, error) {
-	path := "/proc/slabinfo"
-
-	var slabs []slabInfo
-	if err := util.ReadFile(path, func(file io.Reader) error {
-		var err error
-		slabs, err = parseSlabInfo(file)
-		return err
-	}); err != nil {
-		return nil, err
-	}
-
-	return slabs, nil
+	return util.ReadFileReturning("/proc/slabinfo", parseSlabInfo)
 }
 
 func parseSlabInfo(reader io.Reader) ([]slabInfo, error) {

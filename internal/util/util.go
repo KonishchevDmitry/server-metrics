@@ -28,6 +28,20 @@ func (g *WaitGroup) Wait() {
 	g.group.Wait()
 }
 
+func ReadFileReturning[T any](path string, reader func(file io.Reader) (T, error)) (T, error) {
+	var result T
+
+	if err := ReadFile(path, func(file io.Reader) error {
+		var err error
+		result, err = reader(file)
+		return err
+	}); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
 func ReadFile(path string, reader func(file io.Reader) error) (resErr error) {
 	file, err := os.Open(path)
 	if err != nil {

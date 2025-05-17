@@ -164,40 +164,29 @@ func (c *Collector) observe(ctx context.Context, metrics chan<- prometheus.Metri
 }
 
 func readString(path string) (string, error) {
-	var value string
-
-	err := util.ReadFile(path, func(file io.Reader) error {
+	return util.ReadFileReturning(path, func(file io.Reader) (string, error) {
 		data, err := io.ReadAll(file)
 		if err != nil {
-			return err
+			return "", err
 		}
-
-		value = string(bytes.TrimRight(data, "\n"))
-		return nil
+		return string(bytes.TrimRight(data, "\n")), nil
 	})
-
-	return value, err
 }
 
 func readValue(path string) (float64, error) {
-	var value float64
-
-	err := util.ReadFile(path, func(file io.Reader) error {
+	return util.ReadFileReturning(path, func(file io.Reader) (float64, error) {
 		data, err := io.ReadAll(file)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		stringValue := string(bytes.TrimRight(data, "\n"))
 
 		integer, err := strconv.ParseUint(stringValue, 10, 64)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
-		value = float64(integer)
-		return nil
+		return float64(integer), nil
 	})
-
-	return value, err
 }
