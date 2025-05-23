@@ -38,7 +38,7 @@ func (c *RaceController) Check(group *Group, err error) error {
 	races := c.active[group.Name]
 
 	if _, ok := c.current[group.Name]; !ok {
-		races += 1
+		races++
 		c.current[group.Name] = struct{}{}
 		c.active[group.Name] = races
 	}

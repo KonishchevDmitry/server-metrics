@@ -8,9 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/xerrors"
-
 	"github.com/samber/mo"
+	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
