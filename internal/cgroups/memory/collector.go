@@ -13,16 +13,16 @@ import (
 
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cgroupsutil"
-	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
 type Collector struct {
+	races *cgroups.RaceController
 }
 
 var _ cgroups.Collector = &Collector{}
 
-func NewCollector() *Collector {
-	return &Collector{}
+func NewCollector(races *cgroups.RaceController) *Collector {
+	return &Collector{races: races}
 }
 
 func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
@@ -122,24 +122,12 @@ func (c *Collector) collectRoot(group *cgroups.Group, usage Usage, children []*c
 		childUsage, childExists, err := c.collect(child)
 		if err != nil {
 			return Usage{}, false, err
-		}
-
-		if !childExists {
+		} else if !childExists {
 			if group.IsRoot() {
 				return Usage{}, false, fmt.Errorf("%q has been deleted during metrics collection", child.Path())
-			}
-
-			// It might be a race with user session opening/closing
-			if err := util.RetryRace(fmt.Errorf("%q is missing, but is expected to exist", child.Path()), func() (bool, error) {
-				if rootExists, err := group.IsExist(); err != nil || !rootExists {
-					return !rootExists, err
-				}
-
-				// Attention: Override the collection result
-				childUsage, childExists, err = c.collect(child)
-				return childExists, err
-			}); err != nil || !childExists {
-				return Usage{}, false, err
+			} else {
+				return Usage{}, false, c.races.Check(group, fmt.Errorf(
+					"%q is missing, but is expected to exist", child.Path()))
 			}
 		}
 

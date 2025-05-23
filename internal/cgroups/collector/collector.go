@@ -3,7 +3,6 @@ package collector
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -16,26 +15,28 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/cpu"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/io"
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups/memory"
-	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
 type Collector struct {
-	lock       sync.Mutex
 	logger     *zap.SugaredLogger
 	classifier *classifier.Classifier
+
+	lock       sync.Mutex
+	races      *cgroups.RaceController
 	collectors []cgroups.Collector
 }
 
 var _ prometheus.Collector = &Collector{}
 
-func NewCollector(logger *zap.SugaredLogger, classifier *classifier.Classifier) *Collector {
+func NewCollector(logger *zap.SugaredLogger, classifier *classifier.Classifier, races *cgroups.RaceController) *Collector {
 	return &Collector{
 		logger:     logger,
 		classifier: classifier,
+		races:      races,
 		collectors: []cgroups.Collector{
-			cpu.NewCollector(),
-			memory.NewCollector(),
-			io.NewCollector(),
+			cpu.NewCollector(races),
+			memory.NewCollector(races),
+			io.NewCollector(races),
 		},
 	}
 }
@@ -52,11 +53,13 @@ func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	c.races.OnCollectionStarted()
+
 	for _, collector := range c.collectors {
 		collector.Pre()
 	}
 
-	root := cgroups.NewGroup("/")
+	root := cgroups.NewGroup("/", c.races)
 	services := make(map[string]string)
 
 	exists, err := c.observe(ctx, root, services, metrics)
@@ -71,6 +74,8 @@ func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
 	for _, collector := range c.collectors {
 		collector.Post(ctx)
 	}
+
+	c.races.OnCollectionFinished()
 }
 
 func (c *Collector) observe(
@@ -81,14 +86,16 @@ func (c *Collector) observe(
 		logging.L(ctx).Errorf("Failed to classify %q cgroup: %s.", group.Name, err)
 		return true, nil
 	}
-	needsCollection := classification.TotalCollection
 
-	if classification.TotalCollection {
-		for _, name := range classification.TotalExcludeChildren {
+	var needsCollection bool
+
+	if totalExcluding, ok := classification.TotalExcluding.Get(); ok {
+		for _, name := range totalExcluding {
 			if _, err := c.observe(ctx, group.Child(name), services, metrics); err != nil {
 				return false, err
 			}
 		}
+		needsCollection = true
 	} else {
 		var observeChildren bool
 
@@ -100,25 +107,6 @@ func (c *Collector) observe(
 			if err != nil || !exists {
 				return exists, err
 			}
-
-			// /user.slice/user-XXX.slice/user@XXX.service is expected to be always empty, but when user session is
-			// being started systemd is placed there first and only then is being moved to init.scope
-			if classification.SystemdUserRoot && hasProcesses {
-				systemdUserRootErr := fmt.Errorf("%q group contains some processes, which is not expected", group.Name)
-
-				if err := util.RetryRace(systemdUserRootErr, func() (bool, error) {
-					hasProcesses, exists, err := group.HasProcesses()
-					return !hasProcesses || !exists, err
-				}); err != nil {
-					if !errors.Is(err, systemdUserRootErr) {
-						return false, err
-					}
-					logging.L(ctx).Errorf("%s.", err)
-				}
-
-				hasProcesses = false
-			}
-
 			needsCollection = hasProcesses
 			observeChildren = !hasProcesses
 		}
@@ -152,7 +140,7 @@ func (c *Collector) observe(
 	}
 	services[classification.Service] = group.Name
 
-	if exists, err := c.collect(ctx, classification.Service, group, classification.TotalExcludeChildren, metrics); err != nil {
+	if exists, err := c.collect(ctx, classification.Service, group, classification.TotalExcluding.OrEmpty(), metrics); err != nil {
 		logging.L(ctx).Errorf("Failed to collect metrics for %s cgroup: %s.", group.Name, err)
 	} else if !exists {
 		return false, nil

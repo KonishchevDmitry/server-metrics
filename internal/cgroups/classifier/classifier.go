@@ -10,15 +10,15 @@ import (
 
 	"golang.org/x/xerrors"
 
+	"github.com/samber/mo"
+
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
 )
 
 type Classification struct {
-	Service              string
-	SystemdUserRoot      bool
-	TotalCollection      bool
-	TotalExcludeChildren []string
+	Service        string
+	TotalExcluding mo.Option[[]string]
 }
 
 type Classifier struct {
@@ -105,12 +105,13 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 			// * init.scope - systemd
 			// * app.slice - services
 			// * tmux-spawn-2c342f76-8d5b-4046-919e-b14ed5265ad2.scope – each tmux window runs in a separate scope
+			//
+			// user@1000.service is expected to have no processes, but when user session is being started systemd is
+			// placed here first and only then is being moved to init.scope
 
 			return Classification{
-				Service:              userName,
-				SystemdUserRoot:      true,
-				TotalCollection:      true,
-				TotalExcludeChildren: []string{"app.slice", "init.scope"},
+				Service:        userName,
+				TotalExcluding: mo.Some([]string{"app.slice", "init.scope"}),
 			}, true, nil
 		}
 
@@ -216,9 +217,8 @@ func (c classifyContext) classify(service string) (Classification, bool, error) 
 
 func (c classifyContext) classifyTotal(service string, exclude ...string) (Classification, bool, error) {
 	return Classification{
-		Service:              c.prefix + service,
-		TotalCollection:      true,
-		TotalExcludeChildren: exclude,
+		Service:        c.prefix + service,
+		TotalExcluding: mo.Some(exclude),
 	}, true, nil
 }
 

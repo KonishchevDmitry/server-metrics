@@ -9,17 +9,23 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/samber/mo"
+
 	"github.com/KonishchevDmitry/server-metrics/internal/util"
 )
 
 const rootPath = "/sys/fs/cgroup"
 
 type Group struct {
-	Name string
+	Name  string
+	races mo.Option[*RaceController]
 }
 
-func NewGroup(name string) *Group {
-	return &Group{Name: name}
+func NewGroup(name string, races *RaceController) *Group {
+	return &Group{
+		Name:  name,
+		races: mo.EmptyableToOption(races),
+	}
 }
 
 func (g *Group) IsRoot() bool {
@@ -35,7 +41,7 @@ func (g *Group) Path() string {
 }
 
 func (g *Group) Child(name string) *Group {
-	return NewGroup(path.Join(g.Name, name))
+	return NewGroup(path.Join(g.Name, name), g.races.OrEmpty())
 }
 
 func (g *Group) Children() ([]*Group, bool, error) {
@@ -93,17 +99,13 @@ func (g *Group) ReadProperty(name string, reader func(file io.Reader) error) (bo
 		return true, nil
 	} else if err := mapReadError(err); err != nil {
 		return false, err
-	}
-
-	// Property file is missing. Before returning a misconfiguration error, check it for the following possible races:
-	// * Group is deleting
-	// * Group is creating and in process of configuration
-	return false, util.RetryRace(fmt.Errorf("%q is missing", propertyPath), func() (bool, error) {
-		if exists, err := isExist(groupPath); err != nil || !exists {
-			return !exists, err
+	} else {
+		err := fmt.Errorf("%q is missing", propertyPath)
+		if races, ok := g.races.Get(); ok {
+			err = races.Check(g, err)
 		}
-		return isExist(propertyPath)
-	})
+		return false, err
+	}
 }
 
 func (g *Group) list() ([]os.DirEntry, bool, error) {

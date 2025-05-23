@@ -58,7 +58,7 @@ func (c *Collector) Collect(metrics chan<- prometheus.Metric) {
 func (c *Collector) observe(ctx context.Context, metrics chan<- prometheus.Metric) error {
 	const kworkersName = "kworkers"
 
-	group := cgroups.NewGroup("/")
+	group := cgroups.NewGroup("/", nil)
 
 	pids, exists, err := group.PIDs()
 	if err != nil {

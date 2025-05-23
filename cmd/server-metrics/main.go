@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	cgroupclassifier "github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
 	cgroupscollector "github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
 	"github.com/KonishchevDmitry/server-metrics/internal/docker"
@@ -129,9 +130,17 @@ func execute(cmd *cobra.Command) error {
 		}
 	}()
 
+	// FIXME(konishchev): Alter the thresholds
+	var maxRaceRetries, maxActiveRaces int
+	if !develMode {
+		maxRaceRetries = 1
+		maxActiveRaces = 1
+	}
+
+	raceController := cgroups.NewRaceController(logger, maxRaceRetries, maxActiveRaces)
 	cgroupClassifier := cgroupclassifier.New(users.NewResolver(), dockerResolver)
 
-	cgroupsCollector := cgroupscollector.NewCollector(logger, cgroupClassifier)
+	cgroupsCollector := cgroupscollector.NewCollector(logger, cgroupClassifier, raceController)
 	if err := register(cgroupsCollector); err != nil {
 		return err
 	}

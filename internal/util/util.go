@@ -78,21 +78,6 @@ func ParseFile(reader io.Reader, parser func(line string) error) error {
 	return scanner.Err()
 }
 
-func RetryRace(failure error, retry func() (bool, error)) error {
-	period := 10 * time.Millisecond
-	deadline := time.Now().Add(time.Second)
-
-	for time.Until(deadline) >= period {
-		time.Sleep(period)
-
-		if ok, err := retry(); err != nil || ok {
-			return err
-		}
-	}
-
-	return failure
-}
-
 func Uptime() time.Duration {
 	var timespec unix.Timespec
 	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &timespec); err != nil {
