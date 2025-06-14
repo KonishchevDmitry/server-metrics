@@ -33,7 +33,6 @@ func (c *RaceController) OnCollectionStarted() {
 	clear(c.current)
 }
 
-// FIXME(konishchev): Debug logging?
 func (c *RaceController) Check(group *Group, err error) error {
 	races := c.active[group.Name]
 
@@ -51,7 +50,10 @@ func (c *RaceController) Check(group *Group, err error) error {
 		return err
 	}
 
-	c.logger.Warnf("Suppressing a possible race on %q cgroup (%d): %s.", group.Name, races, err)
+	c.logger.Infof(
+		"Suppressing a possible race on %q cgroup (%d races, %d raced groups): %s.",
+		group.Name, races, len(c.active), err)
+
 	return nil
 }
 

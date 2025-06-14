@@ -130,11 +130,10 @@ func execute(cmd *cobra.Command) error {
 		}
 	}()
 
-	// FIXME(konishchev): Alter the thresholds
 	var maxRaceRetries, maxActiveRaces int
 	if !develMode {
-		maxRaceRetries = 1
-		maxActiveRaces = 1
+		maxRaceRetries = 2
+		maxActiveRaces = 10
 	}
 
 	raceController := cgroups.NewRaceController(logger, maxRaceRetries, maxActiveRaces)
