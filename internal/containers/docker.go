@@ -6,30 +6,20 @@ import (
 	"sync"
 
 	"github.com/docker/docker/client"
-	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 type dockerResolver struct {
 	lock   sync.Mutex
-	cache  *lru.Cache[string, Container]
 	client *client.Client
 }
 
 var _ Resolver = &dockerResolver{}
 
 func NewDockerResolver() Resolver {
-	cache, err := lru.New[string, Container](10)
-	if err != nil {
-		panic(err)
-	}
-	return &dockerResolver{cache: cache}
+	return newCachingResolver(&dockerResolver{})
 }
 
 func (r *dockerResolver) Resolve(ctx context.Context, id string) (Container, error) {
-	if container, ok := r.cache.Get(id); ok {
-		return container, nil
-	}
-
 	cli, err := r.getClient()
 	if err != nil {
 		return Container{}, err
@@ -40,13 +30,15 @@ func (r *dockerResolver) Resolve(ctx context.Context, id string) (Container, err
 		return Container{}, err
 	}
 
-	container := Container{
-		Name:      strings.TrimLeft(info.Name, "/"),
-		Temporary: info.HostConfig.AutoRemove,
+	var temporary bool
+	if hostConfig := info.HostConfig; hostConfig != nil {
+		temporary = hostConfig.AutoRemove
 	}
-	r.cache.Add(id, container)
 
-	return container, nil
+	return Container{
+		Name:      strings.TrimLeft(info.Name, "/"),
+		Temporary: temporary,
+	}, nil
 }
 
 func (r *dockerResolver) getClient() (*client.Client, error) {
