@@ -38,13 +38,13 @@ type httpLogger struct {
 	logger *zap.SugaredLogger
 }
 
-func (l httpLogger) Write(data []byte) (n int, err error) {
-	size := len(data)
-	if size != 0 && data[size-1] == '\n' {
-		data = data[:size-1]
+func (l httpLogger) Write(message []byte) (int, error) {
+	size := len(message)
+	if size != 0 && message[size-1] == '\n' {
+		message = message[:size-1]
 	}
 
-	l.logger.Errorf("HTTP server: %s", data)
+	l.logger.Errorf("HTTP server: %s", message)
 	return size, nil
 }
 

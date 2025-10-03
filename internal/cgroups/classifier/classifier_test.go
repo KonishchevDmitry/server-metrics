@@ -7,7 +7,7 @@ import (
 	"github.com/samber/mo"
 	"github.com/stretchr/testify/require"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/docker"
+	"github.com/KonishchevDmitry/server-metrics/internal/containers"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
 )
 
@@ -18,7 +18,7 @@ func TestClassifier(t *testing.T) {
 		1000: "dmitry",
 	})
 
-	dockerResolver := docker.NewResolverMock(map[string]docker.Container{
+	dockerResolver := containers.NewResolverMock(map[string]containers.Container{
 		"3413aa74fd2ff75f15b32438dce58a63b73bc04c4bd476ca7ab54c12da6a43d4": {Name: "server-metrics"},
 		"89eae77df5fb5de73ccc3eff21cd7f1c72434fef6ade1328924315ebe7eeadd5": {Temporary: true},
 	})

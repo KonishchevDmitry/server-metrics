@@ -14,7 +14,7 @@ import (
 	"github.com/KonishchevDmitry/server-metrics/internal/cgroups"
 	cgroupclassifier "github.com/KonishchevDmitry/server-metrics/internal/cgroups/classifier"
 	cgroupscollector "github.com/KonishchevDmitry/server-metrics/internal/cgroups/collector"
-	"github.com/KonishchevDmitry/server-metrics/internal/docker"
+	"github.com/KonishchevDmitry/server-metrics/internal/containers"
 	"github.com/KonishchevDmitry/server-metrics/internal/kernel"
 	"github.com/KonishchevDmitry/server-metrics/internal/kernelprocs"
 	"github.com/KonishchevDmitry/server-metrics/internal/meminfo"
@@ -123,7 +123,7 @@ func execute(cmd *cobra.Command) error {
 		return err
 	}
 
-	dockerResolver := docker.NewResolver()
+	dockerResolver := containers.NewDockerResolver()
 	defer func() {
 		if err := dockerResolver.Close(); err != nil {
 			logging.L(ctx).Errorf("Failed to close Docker resolver: %s.", err)

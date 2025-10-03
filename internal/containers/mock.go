@@ -1,9 +1,8 @@
-package docker
+package containers
 
 import (
 	"context"
-
-	"golang.org/x/xerrors"
+	"errors"
 )
 
 type resolverMock struct {
@@ -17,7 +16,7 @@ func NewResolverMock(containers map[string]Container) Resolver {
 func (r *resolverMock) Resolve(ctx context.Context, id string) (Container, error) {
 	container, ok := r.containers[id]
 	if !ok {
-		return Container{}, xerrors.New("Invalid container ID")
+		return Container{}, errors.New("Invalid container ID")
 	}
 	return container, nil
 }

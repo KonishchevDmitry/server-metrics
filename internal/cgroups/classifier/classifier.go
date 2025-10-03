@@ -11,7 +11,7 @@ import (
 	"github.com/samber/mo"
 	"golang.org/x/xerrors"
 
-	"github.com/KonishchevDmitry/server-metrics/internal/docker"
+	"github.com/KonishchevDmitry/server-metrics/internal/containers"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
 )
 
@@ -22,10 +22,10 @@ type Classification struct {
 
 type Classifier struct {
 	users  users.Resolver
-	docker docker.Resolver
+	docker containers.Resolver
 }
 
-func New(users users.Resolver, docker docker.Resolver) *Classifier {
+func New(users users.Resolver, docker containers.Resolver) *Classifier {
 	return &Classifier{
 		users:  users,
 		docker: docker,

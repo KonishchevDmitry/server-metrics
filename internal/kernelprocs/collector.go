@@ -153,6 +153,7 @@ type procStat struct {
 	usage uint64
 }
 
+// https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html
 func parseProcStat(data []byte) (procStat, bool) {
 	nameStart := bytes.IndexByte(data, '(')
 	nameEnd := bytes.LastIndexByte(data, ')')

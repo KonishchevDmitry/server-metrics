@@ -1,4 +1,4 @@
-package docker
+package containers
 
 import (
 	"context"
@@ -9,33 +9,23 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
-type Resolver interface {
-	Resolve(ctx context.Context, id string) (Container, error)
-	Close() error
-}
-
-type Container struct {
-	Name      string
-	Temporary bool
-}
-
-type resolver struct {
+type dockerResolver struct {
 	lock   sync.Mutex
 	cache  *lru.Cache[string, Container]
 	client *client.Client
 }
 
-var _ Resolver = &resolver{}
+var _ Resolver = &dockerResolver{}
 
-func NewResolver() Resolver {
+func NewDockerResolver() Resolver {
 	cache, err := lru.New[string, Container](10)
 	if err != nil {
 		panic(err)
 	}
-	return &resolver{cache: cache}
+	return &dockerResolver{cache: cache}
 }
 
-func (r *resolver) Resolve(ctx context.Context, id string) (Container, error) {
+func (r *dockerResolver) Resolve(ctx context.Context, id string) (Container, error) {
 	if container, ok := r.cache.Get(id); ok {
 		return container, nil
 	}
@@ -59,7 +49,7 @@ func (r *resolver) Resolve(ctx context.Context, id string) (Container, error) {
 	return container, nil
 }
 
-func (r *resolver) getClient() (*client.Client, error) {
+func (r *dockerResolver) getClient() (*client.Client, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -75,7 +65,7 @@ func (r *resolver) getClient() (*client.Client, error) {
 	return r.client, nil
 }
 
-func (r *resolver) Close() error {
+func (r *dockerResolver) Close() error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
