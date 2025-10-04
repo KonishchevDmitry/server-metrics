@@ -6,7 +6,7 @@ import (
 
 type Container struct {
 	Name      string
-	Temporary bool
+	Temporary bool // Temporary containers have auto-generated names
 }
 
 type Resolver interface {

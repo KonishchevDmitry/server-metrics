@@ -1,0 +1,6 @@
+{
+    "go.buildTags": "containers_image_docker_daemon_stub,containers_image_openpgp,remote",
+    "gopls" : {
+        "formatting.local": "github.com/KonishchevDmitry/server-metrics/",
+    }
+}

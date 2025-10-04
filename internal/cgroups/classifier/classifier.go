@@ -23,19 +23,28 @@ type Classification struct {
 type Classifier struct {
 	users  users.Resolver
 	docker containers.Resolver
+	podman containers.Resolver
 }
 
-func New(users users.Resolver, docker containers.Resolver) *Classifier {
+func New(users users.Resolver, docker containers.Resolver, podman containers.Resolver) *Classifier {
 	return &Classifier{
 		users:  users,
 		docker: docker,
+		podman: podman,
 	}
 }
 
-var systemSlicePathRegex = regexp.MustCompile(`^/system\.slice(/system-[^/]+.slice)?$`)
-var userSliceNameRegex = regexp.MustCompile(`^user-(\d+)\.slice$`)
-var userSlicePathRegex = regexp.MustCompile(`^/user\.slice(/user-(\d+)\.slice(/user@\d+\.service(/(?:app|session)\.slice(?:/(?:app|session)-[^/]+.slice)?)?)?)?$`)
+var (
+	systemSlicePathRegex = regexp.MustCompile(`^/system\.slice(/system-[^/]+.slice)?$`)
 
+	podmanBuilderPathRegex   = regexp.MustCompile(`^/system\.slice/crun-buildah-[^/]+.scope/container$`)
+	podmanContainerPathRegex = regexp.MustCompile(`^/machine\.slice/(?:libpod-conmon-([^/]+).scope|libpod-([^/]+).scope/container)$`)
+
+	userSliceNameRegex = regexp.MustCompile(`^user-(\d+)\.slice$`)
+	userSlicePathRegex = regexp.MustCompile(`^/user\.slice(/user-(\d+)\.slice(/user@\d+\.service(/(?:app|session)\.slice(?:/(?:app|session)-[^/]+.slice)?)?)?)?$`)
+)
+
+// TODO(konishchev): Need to rewrite this to something maintainable
 func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classification, bool, error) {
 	name = strings.ReplaceAll(name, `\x2d`, `-`)
 	system := classifyContext{slice: "system"}
@@ -59,6 +68,25 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 			return classification, ok, err
 		}
 		return c.classifySupplementaryChild(system, child)
+	} else if podmanBuilderPathRegex.MatchString(name) {
+		return system.classify("podman-builder")
+	} else if match := podmanContainerPathRegex.FindStringSubmatch(name); len(match) != 0 {
+		id, suffix := match[2], ""
+		if id == "" {
+			id, suffix = match[1], "/supervisor"
+		}
+
+		container, err := c.podman.Resolve(ctx, id)
+		if err != nil {
+			return Classification{}, false, err
+		}
+
+		service := container.Name
+		if container.Temporary {
+			service = "podman-containers"
+		}
+
+		return system.classify(service + suffix)
 	} else if match := userSlicePathRegex.FindStringSubmatch(parent); len(match) != 0 {
 		uidString := match[2]
 

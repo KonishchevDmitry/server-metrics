@@ -2,7 +2,7 @@ package containers
 
 import (
 	"context"
-	"errors"
+	"fmt"
 )
 
 type resolverMock struct {
@@ -16,7 +16,7 @@ func NewResolverMock(containers map[string]Container) Resolver {
 func (r *resolverMock) Resolve(ctx context.Context, id string) (Container, error) {
 	container, ok := r.containers[id]
 	if !ok {
-		return Container{}, errors.New("Invalid container ID")
+		return Container{}, fmt.Errorf("Invalid container ID: %q", id)
 	}
 	return container, nil
 }

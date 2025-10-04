@@ -130,6 +130,13 @@ func execute(cmd *cobra.Command) error {
 		}
 	}()
 
+	podmanResolver := containers.NewPodmanResolver()
+	defer func() {
+		if err := podmanResolver.Close(); err != nil {
+			logging.L(ctx).Errorf("Failed to close Podman resolver: %s.", err)
+		}
+	}()
+
 	var maxRaceRetries, maxActiveRaces int
 	if !develMode {
 		maxRaceRetries = 2
@@ -137,7 +144,7 @@ func execute(cmd *cobra.Command) error {
 	}
 
 	raceController := cgroups.NewRaceController(logger, maxRaceRetries, maxActiveRaces)
-	cgroupClassifier := cgroupclassifier.New(users.NewResolver(), dockerResolver)
+	cgroupClassifier := cgroupclassifier.New(users.NewResolver(), dockerResolver, podmanResolver)
 
 	cgroupsCollector := cgroupscollector.NewCollector(logger, cgroupClassifier, raceController)
 	if err := register(cgroupsCollector); err != nil {

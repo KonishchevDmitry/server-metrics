@@ -26,7 +26,15 @@ func TestClassifier(t *testing.T) {
 		require.NoError(t, dockerResolver.Close())
 	}()
 
-	classifier := New(userResolver, dockerResolver)
+	podmanResolver := containers.NewResolverMock(map[string]containers.Container{
+		"cdbcfe0c9ba72a9908bca0d50f438275178f5e94229ac54e2ea9bd71e70e4134": {Name: "server-metrics"},
+		"dc9145bfa6eeb9f415dea90c2eaabbac6f35e844cfc71f25cf3c4567773a0d83": {Temporary: true},
+	})
+	defer func() {
+		require.NoError(t, podmanResolver.Close())
+	}()
+
+	classifier := New(userResolver, dockerResolver, podmanResolver)
 
 	traverse := mo.None[[]string]()
 	total := func(exclude ...string) mo.Option[[]string] {
@@ -44,16 +52,28 @@ func TestClassifier(t *testing.T) {
 
 		{"/system.slice", "", traverse},
 		{"/system.slice/boot-efi.mount", "boot-efi.mount", traverse},
-		{"/system.slice/docker-3413aa74fd2ff75f15b32438dce58a63b73bc04c4bd476ca7ab54c12da6a43d4.scope", "server-metrics", traverse},
-		{"/system.slice/docker-89eae77df5fb5de73ccc3eff21cd7f1c72434fef6ade1328924315ebe7eeadd5.scope", "docker-containers", traverse},
 		{"/system.slice/nginx.service", "nginx", traverse},
 		{"/system.slice/snap.shadowsocks-rust.ssserver-daemon-b5bad6a9-8ff1-4730-9f03-83b9d5998ddd.scope", "ssserver-daemon", traverse},
-		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", traverse},
 		{`/system.slice/system-openvpn\x2dserver.slice`, "", traverse},
 		{`/system.slice/system-openvpn\x2dserver.slice/openvpn-server@proxy.service`, "openvpn-server@proxy", traverse},
 		{"/system.slice/systemd-udevd.service", "systemd-udevd", total()},
 		{"/system.slice/systemd-journald-dev-log.socket", "systemd-journald-dev-log.socket", traverse},
 		{`/system.slice/system-dbus\x2d:1.4\x2dorg.fedoraproject.SetroubleshootPrivileged.slice`, "dbus:org.fedoraproject.SetroubleshootPrivileged", total()},
+
+		{"/system.slice/crun-buildah-buildah2365838308.scope", "", traverse},
+		{"/system.slice/crun-buildah-buildah2365838308.scope/container", "podman-builder", traverse},
+		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", traverse},
+
+		{"/system.slice/docker-3413aa74fd2ff75f15b32438dce58a63b73bc04c4bd476ca7ab54c12da6a43d4.scope", "server-metrics", traverse},
+		{"/system.slice/docker-89eae77df5fb5de73ccc3eff21cd7f1c72434fef6ade1328924315ebe7eeadd5.scope", "docker-containers", traverse},
+
+		{"/machine.slice", "", traverse},
+		{"/machine.slice/libpod-cdbcfe0c9ba72a9908bca0d50f438275178f5e94229ac54e2ea9bd71e70e4134.scope", "", traverse},
+		{"/machine.slice/libpod-cdbcfe0c9ba72a9908bca0d50f438275178f5e94229ac54e2ea9bd71e70e4134.scope/container", "server-metrics", traverse},
+		{"/machine.slice/libpod-conmon-cdbcfe0c9ba72a9908bca0d50f438275178f5e94229ac54e2ea9bd71e70e4134.scope", "server-metrics/supervisor", traverse},
+		{"/machine.slice/libpod-dc9145bfa6eeb9f415dea90c2eaabbac6f35e844cfc71f25cf3c4567773a0d83.scope", "", traverse},
+		{"/machine.slice/libpod-dc9145bfa6eeb9f415dea90c2eaabbac6f35e844cfc71f25cf3c4567773a0d83.scope/container", "podman-containers", traverse},
+		{"/machine.slice/libpod-conmon-dc9145bfa6eeb9f415dea90c2eaabbac6f35e844cfc71f25cf3c4567773a0d83.scope", "podman-containers/supervisor", traverse},
 
 		{"/user.slice", "", traverse},
 		{"/user.slice/user-1000.slice", "dmitry/sessions", total("user@1000.service")},

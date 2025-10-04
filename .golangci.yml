@@ -17,6 +17,7 @@ linters:
     - gochecknoinits
     - gocognit
     - gocyclo
+    - godoclint
     - godot
     - godox
     - ireturn
@@ -25,7 +26,9 @@ linters:
     - mnd
     - nestif
     - nlreturn
+    - noctx
     - nonamedreturns
+    - noinlineerr
     - paralleltest
     - perfsprint
     - prealloc
@@ -33,6 +36,7 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
+    - wsl_v5
   exclusions:
     generated: lax
     presets:
@@ -43,6 +47,9 @@ linters:
     rules:
     - linters: [contextcheck]
       text: "Function `[^`]+` should pass the context parameter"
+
+    - linters: [embeddedstructfieldcheck]
+      text: "there must be an empty line separating embedded fields from regular fields"
 
     - linters: [gocritic]
       text: "ifElseChain: rewrite if-else to switch statement"
@@ -58,6 +65,9 @@ linters:
 
     - linters: [promlinter]
       text: "Error: counter metrics should have \"_total\" suffix"
+
+    - linters: [revive]
+      text: "var-naming: avoid meaningless package names"
 
     - linters: [revive]
       text: "empty-block: this block is empty, you can remove it"

@@ -3,23 +3,36 @@
 set -eu
 
 package=github.com/KonishchevDmitry/server-metrics
-go_cache_args=(-v "$HOME/.cache/go-containers:/cache" -e GOCACHE=/cache/go -e GOMODCACHE=/cache/mod)
 src_dirs="$(realpath --no-symlinks --relative-to "$PWD" $(go list -f '{{.Dir}}' ./...))"
+
+# The tags reduce Podman bindings dependencies:
+# * containers_image_docker_daemon_stub, containers_image_openpgp – https://github.com/containers/image/blob/df7e80d2d19872b61f352a8a182ec934dc0c2346/README.md?plain=1#L63
+# * remote – https://github.com/containers/podman/blob/ef584d4d6d5b50d7eb48a785be6c954bb0abe5c6/pkg/bindings/README.md?plain=1#L243
+export GOFLAGS=-tags=containers_image_docker_daemon_stub,containers_image_openpgp,remote
+
+go_args=(
+    -v "$HOME/.cache/go-containers:/cache"
+
+    -e GOFLAGS
+    -e CGO_ENABLED=0
+    -e GOCACHE=/cache/go
+    -e GOMODCACHE=/cache/mod
+)
 
 set -x
 
 go get -u -t ./...
 go mod tidy
 
-docker run --pull always --rm -v "$PWD:/app" -w /app "${go_cache_args[@]}" golang \
+docker run --pull always --rm -v "$PWD:/app" -w /app "${go_args[@]}" golang \
     go test ./...
 
 gofmt -s -w $src_dirs
 go tool gci write --section standard --section default --section "prefix($package)" $src_dirs
-# docker run --pull always --rm -v "$PWD:/app" -w /app "${go_cache_args[@]}" golang \
+# docker run --pull always --rm -v "$PWD:/app" -w /app "${go_args[@]}" golang \
 #     bash -c 'go install -v github.com/daixiang0/gci@latest && gci $0 "$@" > /dev/null' \
 #     write --section standard --section default --section "prefix($package)" $src_dirs
 
-docker run --pull always --rm -t -v "$PWD:/app" -w /app "${go_cache_args[@]}" \
+docker run --pull always --rm -t -v "$PWD:/app" -w /app "${go_args[@]}" \
     -e GOLANGCI_LINT_CACHE=/cache/lint golangci/golangci-lint \
     golangci-lint run --timeout 5m
