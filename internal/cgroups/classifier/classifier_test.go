@@ -60,12 +60,14 @@ func TestClassifier(t *testing.T) {
 		{"/system.slice/systemd-journald-dev-log.socket", "systemd-journald-dev-log.socket", traverse},
 		{`/system.slice/system-dbus\x2d:1.4\x2dorg.fedoraproject.SetroubleshootPrivileged.slice`, "dbus:org.fedoraproject.SetroubleshootPrivileged", total()},
 
-		{"/system.slice/crun-buildah-buildah2365838308.scope", "", traverse},
-		{"/system.slice/crun-buildah-buildah2365838308.scope/container", "podman-builder", traverse},
 		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", traverse},
-
 		{"/system.slice/docker-3413aa74fd2ff75f15b32438dce58a63b73bc04c4bd476ca7ab54c12da6a43d4.scope", "server-metrics", traverse},
 		{"/system.slice/docker-89eae77df5fb5de73ccc3eff21cd7f1c72434fef6ade1328924315ebe7eeadd5.scope", "docker-containers", traverse},
+
+		{"/system.slice/crun-buildah-buildah2365838308.scope", "", traverse},
+		{"/system.slice/crun-buildah-buildah2365838308.scope/container", "podman-builder", traverse},
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/crun-buildah-buildah1059824916.scope", "", traverse},
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/crun-buildah-buildah1059824916.scope/container", "dmitry/podman-builder", traverse},
 
 		{"/machine.slice", "", traverse},
 		{"/machine.slice/libpod-cdbcfe0c9ba72a9908bca0d50f438275178f5e94229ac54e2ea9bd71e70e4134.scope", "", traverse},
