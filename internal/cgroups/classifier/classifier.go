@@ -37,8 +37,8 @@ func New(users users.Resolver, docker containers.Resolver, podman containers.Res
 var (
 	systemSlicePathRegex = regexp.MustCompile(`^/system\.slice(/system-[^/]+\.slice)?$`)
 
-	podmanRootBuilderPathRegex   = regexp.MustCompile(`^/system\.slice/crun-buildah-[^/]+.scope$`)
-	podmanUserBuilderPathRegex   = regexp.MustCompile(`^/user\.slice/user-(\d+)\.slice/user@\d+\.service/app\.slice/crun-buildah-[^/]+\.scope$`)
+	podmanRootBuilderPathRegex   = regexp.MustCompile(`^(?:/system\.slice)?/(?:crun-)?buildah-[^/]+$`)
+	podmanUserBuilderPathRegex   = regexp.MustCompile(`^/user\.slice/user-(\d+)\.slice/user@\d+\.service/app\.slice/(?:crun-)?buildah-[^/]+$`)
 	podmanRootContainerPathRegex = regexp.MustCompile(`^/machine\.slice/libpod(-conmon)?-([^/]+)\.scope$`)
 
 	userSliceNameRegex = regexp.MustCompile(`^user-(\d+)\.slice$`)
@@ -57,13 +57,13 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 	parent, child := path.Split(name)
 	parent = path.Clean(parent)
 
-	if parent == "/" {
+	if podmanRootBuilderPathRegex.MatchString(name) {
+		return system.classifyTotal("podman-builder")
+	} else if parent == "/" {
 		if child == "init.scope" {
 			return system.classify("init")
 		}
 		return c.classifySupplementaryChild(system, child)
-	} else if podmanRootBuilderPathRegex.MatchString(name) {
-		return system.classifyTotal("podman-builder")
 	} else if match := systemSlicePathRegex.FindStringSubmatch(parent); len(match) != 0 {
 		// /system.slice/*
 		// /system.slice/system-*.slice/*

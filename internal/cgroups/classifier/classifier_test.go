@@ -64,8 +64,10 @@ func TestClassifier(t *testing.T) {
 		{"/system.slice/docker-3413aa74fd2ff75f15b32438dce58a63b73bc04c4bd476ca7ab54c12da6a43d4.scope", "server-metrics", traverse},
 		{"/system.slice/docker-89eae77df5fb5de73ccc3eff21cd7f1c72434fef6ade1328924315ebe7eeadd5.scope", "docker-containers", traverse},
 
-		{"/system.slice/crun-buildah-buildah2365838308.scope", "podman-builder", total()},
-		{"/user.slice/user-1000.slice/user@1000.service/app.slice/crun-buildah-buildah1059824916.scope", "dmitry/podman-builder", total()},
+		{"/buildah-buildah4144850985", "podman-builder", total()},                                                                          // remote build
+		{"/system.slice/crun-buildah-buildah2365838308.scope", "podman-builder", total()},                                                  // local build
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/buildah-buildah1525486166", "dmitry/podman-builder", total()},            // remote build
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/crun-buildah-buildah1059824916.scope", "dmitry/podman-builder", total()}, // local build
 
 		{"/machine.slice", "", traverse},
 		{"/machine.slice/libpod-cdbcfe0c9ba72a9908bca0d50f438275178f5e94229ac54e2ea9bd71e70e4134.scope", "server-metrics", total()},
