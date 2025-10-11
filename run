@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 
 set -eu
-export DOCKER_CONTEXT=server
 
-docker build -t konishchev/server-metrics .
+name=server-metrics
+export CONTAINER_CONNECTION=server
 
-docker run --rm --pid host --network host --read-only \
-    --cap-drop all --cap-add NET_ADMIN --cap-add CAP_SYSLOG --security-opt no-new-privileges \
-    --device /dev/kmsg:/dev/kmsg \
+# For some reason builds created by Podman remote are run in /buildah-* cgroup which breaks kernel processes CPU usage
+# monitoring, so we override it to /system.slice/buildah-* which is used by non-remote builds.
+#podman build --cgroup-parent "/system.slice/buildah-$(uuidgen).scope" --tag "$name" .
+
+podman run --rm \
+    --pid host --cgroupns host --network host --read-only --read-only-tmpfs=false \
+    --cap-drop ALL --cap-add NET_ADMIN --cap-add SYSLOG --security-opt no-new-privileges \
+    --device /dev/kmsg:/dev/kmsg:r \
     --mount type=bind,src=/dev,dst=/dev,readonly \
     --mount type=bind,src=/sys,dst=/sys,readonly \
     --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
-    --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
-    --mount type=bind,src=/run/podman/podman.sock,dst=/run/podman/podman.sock \
-    --mount type=bind,src=/run/systemd/journal/socket,dst=/run/systemd/journal/socket \
-    konishchev/server-metrics --devel "$@"
+    --mount type=bind,src=/run/podman/podman.sock,dst=/run/podman/podman.sock,readonly \
+    --mount type=bind,src=/run/systemd/journal/socket,dst=/run/systemd/journal/socket,readonly \
+    "localhost/$name" --devel "$@"

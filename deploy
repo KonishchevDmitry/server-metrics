@@ -1,32 +1,17 @@
 #!/usr/bin/env bash
 
 set -eu
-export DOCKER_CONTEXT=server
 
-name=server-metrics
-full_name=konishchev/$name
-
-docker build --pull --tag "$full_name:stable" .
-
-if docker inspect "$name" > /dev/null 2>&1; then
-    docker stop "$name" > /dev/null
-    docker rm "$name" > /dev/null
-fi
-
-docker run --detach --restart unless-stopped \
-    --pid host --network host --read-only \
-    --cap-drop all --cap-add NET_ADMIN --cap-add CAP_SYSLOG --security-opt no-new-privileges \
-    --device /dev/kmsg:/dev/kmsg \
-    --mount type=bind,src=/dev,dst=/dev,readonly \
-    --mount type=bind,src=/sys,dst=/sys,readonly \
-    --mount type=bind,src=/etc/passwd,dst=/etc/passwd,readonly \
-    --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
-    --mount type=bind,src=/run/podman/podman.sock,dst=/run/podman/podman.sock \
-    --mount type=bind,src=/run/systemd/journal/socket,dst=/run/systemd/journal/socket \
-    --name "$name" --log-opt "tag=$name" "$full_name:stable" > /dev/null
+# For some reason builds created by Podman remote are run in /buildah-* cgroup which breaks kernel processes CPU usage
+# monitoring, so we override it to /system.slice/buildah-* which is used by non-remote builds.
+podman -c server build --cgroup-parent "/system.slice/buildah-$(uuidgen).scope" --pull --tag server-metrics .
 
 ssh -t root@server.lan '
     set -eu
+
+    systemctl restart server-metrics
+    sleep 1
+    systemctl status server-metrics
 
     curl -s http://localhost:9101/metrics | sed -r "
         /^#/ d
