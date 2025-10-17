@@ -47,27 +47,25 @@ func TestClassifier(t *testing.T) {
 		totalExcluding mo.Option[[]string]
 	}{
 		{"/", "kernel", traverse},
+		{"/buildah-buildah4144850985", "podman-builder", total()}, // remote build
 		{"/init.scope", "init", traverse},
 		{"/sys-fs-fuse-connections.mount", "sys-fs-fuse-connections.mount", traverse},
 
 		{"/system.slice", "", traverse},
 		{"/system.slice/boot-efi.mount", "boot-efi.mount", traverse},
-		{"/system.slice/nginx.service", "nginx", total()},
-		{"/system.slice/snap.shadowsocks-rust.ssserver-daemon-b5bad6a9-8ff1-4730-9f03-83b9d5998ddd.scope", "ssserver-daemon", traverse},
-		{`/system.slice/system-openvpn\x2dserver.slice`, "", traverse},
-		{`/system.slice/system-openvpn\x2dserver.slice/openvpn-server@proxy.service`, "openvpn-server@proxy", total()},
-		{"/system.slice/systemd-udevd.service", "systemd-udevd", total()},
-		{"/system.slice/systemd-journald-dev-log.socket", "systemd-journald-dev-log.socket", traverse},
-		{`/system.slice/system-dbus\x2d:1.4\x2dorg.fedoraproject.SetroubleshootPrivileged.slice`, "dbus:org.fedoraproject.SetroubleshootPrivileged", total()},
-
-		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", traverse},
+		{"/system.slice/crun-buildah-buildah2365838308.scope", "podman-builder", total()}, // local build
 		{"/system.slice/docker-3413aa74fd2ff75f15b32438dce58a63b73bc04c4bd476ca7ab54c12da6a43d4.scope", "server-metrics", traverse},
 		{"/system.slice/docker-89eae77df5fb5de73ccc3eff21cd7f1c72434fef6ade1328924315ebe7eeadd5.scope", "docker-containers", traverse},
-
-		{"/buildah-buildah4144850985", "podman-builder", total()},                                                                          // remote build
-		{"/system.slice/crun-buildah-buildah2365838308.scope", "podman-builder", total()},                                                  // local build
-		{"/user.slice/user-1000.slice/user@1000.service/app.slice/buildah-buildah1525486166", "dmitry/podman-builder", total()},            // remote build
-		{"/user.slice/user-1000.slice/user@1000.service/app.slice/crun-buildah-buildah1059824916.scope", "dmitry/podman-builder", total()}, // local build
+		{"/system.slice/cdbcfe0c9ba72a9908bca0d50f438275178f5e94229ac54e2ea9bd71e70e4134-20bd978843cc5ad8.service", "server-metrics/healthcheck", total()},
+		{"/system.slice/dc9145bfa6eeb9f415dea90c2eaabbac6f35e844cfc71f25cf3c4567773a0d83-522f7b6f4c650c72.service", "podman-containers/healthcheck", total()},
+		{"/system.slice/nginx.service", "nginx", total()},
+		{"/system.slice/snap.shadowsocks-rust.ssserver-daemon-b5bad6a9-8ff1-4730-9f03-83b9d5998ddd.scope", "ssserver-daemon", traverse},
+		{`/system.slice/system-dbus\x2d:1.4\x2dorg.fedoraproject.SetroubleshootPrivileged.slice`, "dbus:org.fedoraproject.SetroubleshootPrivileged", total()},
+		{`/system.slice/system-openvpn\x2dserver.slice`, "", traverse},
+		{`/system.slice/system-openvpn\x2dserver.slice/openvpn-server@proxy.service`, "openvpn-server@proxy", total()},
+		{"/system.slice/system.slice:docker:jvifp9a6b1lxa1kuw8bwfcovf", "docker-builder", traverse},
+		{"/system.slice/systemd-udevd.service", "systemd-udevd", total()},
+		{"/system.slice/systemd-journald-dev-log.socket", "systemd-journald-dev-log.socket", traverse},
 
 		{"/machine.slice", "", traverse},
 		{"/machine.slice/libpod-cdbcfe0c9ba72a9908bca0d50f438275178f5e94229ac54e2ea9bd71e70e4134.scope", "server-metrics", total()},
@@ -78,16 +76,17 @@ func TestClassifier(t *testing.T) {
 		{"/user.slice", "", traverse},
 		{"/user.slice/user-1000.slice", "dmitry/sessions", total("user@1000.service")},
 		{"/user.slice/user-1000.slice/user@1000.service", "dmitry", total("app.slice", "init.scope")},
-		{"/user.slice/user-1000.slice/user@1000.service/init.scope", "dmitry/init", traverse},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice", "", traverse},
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/buildah-buildah1525486166", "dmitry/podman-builder", total()},            // remote build
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/crun-buildah-buildah1059824916.scope", "dmitry/podman-builder", total()}, // local build
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/dbus.socket", "dmitry/dbus.socket", traverse},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/app-vm.slice", "", traverse},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/app-vm.slice/vm@linux.service", "dmitry/vm@linux", total()},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/ssh-agent.service", "dmitry/ssh-agent", total()},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/snap.go.go-345c278e-7032-498e-8348-5c092e5d3623.scope", "dmitry/go", traverse},
 		{"/user.slice/user-1000.slice/user@1000.service/app.slice/snap.shadowsocks-rust.ssserver-6f2a6b45-86b0-43fc-944f-d367b51e6c2f.scope", "dmitry/ssserver", traverse},
-		{"/user.slice/user-1000.slice/user@1000.service/session.slice", "", traverse},
-		{"/user.slice/user-1000.slice/user@1000.service/session.slice/dbus.service", "dmitry/dbus", total()},
+		{"/user.slice/user-1000.slice/user@1000.service/app.slice/5ad006cde140386bb880ddf7c8f1881e0446c2f9cd46a2ed446250b09072854e-6b72c8998348f9c4.service", "dmitry/podman-containers/healthcheck", total()},
+		{"/user.slice/user-1000.slice/user@1000.service/init.scope", "dmitry/init", traverse},
 	} {
 		t.Run(testCase.group, func(t *testing.T) {
 			classification, ok, err := classifier.ClassifySlice(ctx, testCase.group)

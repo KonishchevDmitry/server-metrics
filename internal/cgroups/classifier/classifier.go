@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/samber/mo"
-	"golang.org/x/xerrors"
 
 	"github.com/KonishchevDmitry/server-metrics/internal/containers"
 	"github.com/KonishchevDmitry/server-metrics/internal/users"
@@ -37,16 +36,18 @@ func New(users users.Resolver, docker containers.Resolver, podman containers.Res
 var (
 	systemSlicePathRegex = regexp.MustCompile(`^/system\.slice(/system-[^/]+\.slice)?$`)
 
-	podmanRootBuilderPathRegex   = regexp.MustCompile(`^(?:/system\.slice)?/(?:crun-)?buildah-[^/]+$`)
-	podmanUserBuilderPathRegex   = regexp.MustCompile(`^/user\.slice/user-(\d+)\.slice/user@\d+\.service/app\.slice/(?:crun-)?buildah-[^/]+$`)
-	podmanRootContainerPathRegex = regexp.MustCompile(`^/machine\.slice/libpod(-conmon)?-([^/]+)\.scope$`)
+	podmanBuilderPathRegex     = regexp.MustCompile(`^(?:/system\.slice|/user\.slice/user-(\d+)\.slice/user@\d+\.service/app\.slice)?/(?:crun-)?buildah-[^/]+$`)
+	podmanContainerPathRegex   = regexp.MustCompile(`^/machine\.slice/libpod(-conmon)?-([^/]+)\.scope$`)
+	podmanHealthcheckPathRegex = regexp.MustCompile(`^/(?:system\.slice|user\.slice/user-(\d+)\.slice/user@\d+\.service/app\.slice)/([0-9a-f]{64})-[0-9a-f]{16}\.service$`)
 
 	userSliceNameRegex = regexp.MustCompile(`^user-(\d+)\.slice$`)
 	userSlicePathRegex = regexp.MustCompile(`^/user\.slice(/user-(\d+)\.slice(/user@\d+\.service(/(?:app|session)\.slice(?:/(?:app|session)-[^/]+\.slice)?)?)?)?$`)
 )
 
-// TODO(konishchev): Need to rewrite this to something maintainable
+// TODO(konishchev): Need to rewrite all this mess to something maintainable
 func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classification, bool, error) {
+	var err error
+
 	name = strings.ReplaceAll(name, `\x2d`, `-`)
 	system := classifyContext{slice: "system"}
 
@@ -57,13 +58,57 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 	parent, child := path.Split(name)
 	parent = path.Clean(parent)
 
-	if podmanRootBuilderPathRegex.MatchString(name) {
-		return system.classifyTotal("podman-builder")
+	if match := podmanBuilderPathRegex.FindStringSubmatch(name); len(match) != 0 {
+		var slice = system
+		if uidMatch := match[1]; uidMatch != "" {
+			slice, err = c.getUserContext(uidMatch)
+			if err != nil {
+				return Classification{}, false, err
+			}
+		}
+		return slice.classifyTotal("podman-builder")
 	} else if parent == "/" {
 		if child == "init.scope" {
 			return system.classify("init")
 		}
 		return c.classifySupplementaryChild(system, child)
+	} else if match := podmanContainerPathRegex.FindStringSubmatch(name); len(match) != 0 {
+		id, suffix := match[2], ""
+		if match[1] != "" {
+			suffix = "/supervisor"
+		}
+
+		var service = "podman-containers"
+		if container, err := c.podman.Resolve(ctx, id); err != nil {
+			return Classification{}, false, err
+		} else if !container.Temporary {
+			service = container.Name
+		}
+
+		return system.classifyTotal(service + suffix)
+	} else if match := podmanHealthcheckPathRegex.FindStringSubmatch(name); len(match) != 0 {
+		var (
+			slice        = system
+			service      = "podman-containers"
+			uidMatch, id = match[1], match[2]
+		)
+
+		if uidMatch != "" {
+			slice, err = c.getUserContext(uidMatch)
+			if err != nil {
+				return Classification{}, false, err
+			}
+
+			// At this time we don't support user containers resolving
+		} else {
+			if container, err := c.podman.Resolve(ctx, id); err != nil {
+				return Classification{}, false, err
+			} else if !container.Temporary {
+				service = container.Name
+			}
+		}
+
+		return slice.classifyTotal(service + "/healthcheck")
 	} else if match := systemSlicePathRegex.FindStringSubmatch(parent); len(match) != 0 {
 		// /system.slice/*
 		// /system.slice/system-*.slice/*
@@ -71,36 +116,6 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 			return classification, ok, err
 		}
 		return c.classifySupplementaryChild(system, child)
-	} else if match := podmanUserBuilderPathRegex.FindStringSubmatch(name); len(match) != 0 {
-		uid, err := strconv.Atoi(match[1])
-		if err != nil {
-			return Classification{}, false, err
-		}
-
-		user, err := c.users.Resolve(uid)
-		if err != nil {
-			return Classification{}, false, xerrors.Errorf(
-				"Unable to resolve %d user ID: %w", uid, err)
-		}
-
-		return system.classifyTotal(fmt.Sprintf("%s/podman-builder", user))
-	} else if match := podmanRootContainerPathRegex.FindStringSubmatch(name); len(match) != 0 {
-		id, suffix := match[2], ""
-		if match[1] != "" {
-			suffix = "/supervisor"
-		}
-
-		container, err := c.podman.Resolve(ctx, id)
-		if err != nil {
-			return Classification{}, false, err
-		}
-
-		service := container.Name
-		if container.Temporary {
-			service = "podman-containers"
-		}
-
-		return system.classifyTotal(service + suffix)
 	} else if match := userSlicePathRegex.FindStringSubmatch(parent); len(match) != 0 {
 		uidString := match[2]
 
@@ -113,28 +128,20 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 			uidString = nameMatch[1]
 		}
 
-		uid, err := strconv.Atoi(uidString)
+		user, err := c.getUserContext(uidString)
 		if err != nil {
 			return Classification{}, false, err
 		}
 
-		userName, err := c.users.Resolve(uid)
-		if err != nil {
-			return Classification{}, false, xerrors.Errorf(
-				"Unable to resolve %d user ID: %w", uid, err)
-		}
-
-		systemdUserServiceName := fmt.Sprintf("user@%d.service", uid)
+		systemdUserServiceName := fmt.Sprintf("user@%s.service", uidString)
 
 		// /user.slice/user-1000.slice
 		if match[1] == "" {
 			// The group contains:
 			// * user@1000.service - systemd user session
 			// * session-*.scope - each ssh/mosh connection is assigned to a session
-			return system.classifyTotal(userName+"/sessions", systemdUserServiceName)
+			return user.classifyTotal("sessions", systemdUserServiceName)
 		}
-
-		user := classifyContext{slice: "app", prefix: userName + "/"}
 
 		// /user.slice/user-1000.slice/*
 		if match[3] == "" {
@@ -145,13 +152,19 @@ func (c *Classifier) ClassifySlice(ctx context.Context, name string) (Classifica
 			// user@1000.service contains:
 			// * init.scope - systemd
 			// * app.slice - services
-			// * tmux-spawn-2c342f76-8d5b-4046-919e-b14ed5265ad2.scope – each tmux window runs in a separate scope
+			// * session.slice:
+			//   * dbus-broker.service
+			// * tmux-spawn-*.scope – each tmux window runs in a separate scope
+			// * user.slice with podmain containers:
+			//   * libpod-*
+			//   * libpod-conmon-*
+			//   * podman-pause-*
 			//
 			// user@1000.service is expected to have no processes, but when user session is being started systemd is
 			// placed here first and only then is being moved to init.scope
 
 			return Classification{
-				Service:        userName,
+				Service:        user.user,
 				TotalExcluding: mo.Some([]string{"app.slice", "init.scope"}),
 			}, true, nil
 		}
@@ -250,18 +263,42 @@ func (c *Classifier) classifyServiceSliceChild(ctx context.Context, context clas
 	return Classification{}, false, nil
 }
 
+func (c *Classifier) getUserContext(uidMatch string) (classifyContext, error) {
+	uid, err := strconv.Atoi(uidMatch)
+	if err != nil {
+		return classifyContext{}, err
+	}
+
+	name, err := c.users.Resolve(uid)
+	if err != nil {
+		return classifyContext{}, fmt.Errorf(
+			"unable to resolve %d user ID: %w", uid, err)
+	}
+
+	return classifyContext{
+		slice: "app",
+		user:  name,
+	}, nil
+}
+
 type classifyContext struct {
-	slice  string
-	prefix string
+	slice string
+	user  string
 }
 
 func (c classifyContext) classify(service string) (Classification, bool, error) {
-	return Classification{Service: c.prefix + service}, true, nil
+	if c.user != "" {
+		service = fmt.Sprintf("%s/%s", c.user, service)
+	}
+	return Classification{Service: service}, true, nil
 }
 
 func (c classifyContext) classifyTotal(service string, exclude ...string) (Classification, bool, error) {
+	if c.user != "" {
+		service = fmt.Sprintf("%s/%s", c.user, service)
+	}
 	return Classification{
-		Service:        c.prefix + service,
+		Service:        service,
 		TotalExcluding: mo.Some(exclude),
 	}, true, nil
 }
