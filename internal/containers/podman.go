@@ -32,8 +32,10 @@ func (r *podmanResolver) Resolve(_ context.Context, id string) (Container, error
 	}
 
 	var temporary bool
-	if hostConfig := info.HostConfig; hostConfig != nil {
-		temporary = hostConfig.AutoRemove
+	if config := info.Config; config == nil || config.Labels["PODMAN_SYSTEMD_UNIT"] == "" {
+		if hostConfig := info.HostConfig; hostConfig != nil {
+			temporary = hostConfig.AutoRemove
+		}
 	}
 
 	return Container{
