@@ -10,9 +10,6 @@ ssh -t root@server.lan '
     set -eu
 
     systemctl restart server-metrics
-    sleep 1
-    systemctl status server-metrics
-
     curl -s http://localhost:9101/metrics | sed -r "
         /^#/ d
         s/^(.+) [^ ]+\$/\1/
