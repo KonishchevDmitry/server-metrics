@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/syslog"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,7 +21,7 @@ type Collector struct {
 	newMessages  chan logEntry
 	messageGroup []logEntry
 	classifier   *classifier
-	waitGroup    util.WaitGroup
+	waitGroup    sync.WaitGroup
 	errors       *prometheus.CounterVec
 }
 
@@ -40,13 +41,13 @@ func NewCollector(ctx context.Context) (*Collector, error) {
 		classifier:  newClassifier(false),
 		errors:      newErrorsMetric(),
 	}
-	c.waitGroup.Run(func() {
+	c.waitGroup.Go(func() {
 		defer close(c.newMessages)
 		if err := c.logReader(ctx); err != nil {
 			logging.L(ctx).Errorf("Kernel collector has crashed: %s.", err)
 		}
 	})
-	c.waitGroup.Run(func() {
+	c.waitGroup.Go(func() {
 		c.logProcessor(ctx)
 	})
 

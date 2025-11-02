@@ -6,27 +6,10 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/sys/unix"
 )
-
-type WaitGroup struct {
-	group sync.WaitGroup
-}
-
-func (g *WaitGroup) Run(runner func()) {
-	g.group.Add(1)
-	go func() {
-		defer g.group.Done()
-		runner()
-	}()
-}
-
-func (g *WaitGroup) Wait() {
-	g.group.Wait()
-}
 
 func ReadFileReturning[T any](path string, reader func(file io.Reader) (T, error)) (T, error) {
 	var result T

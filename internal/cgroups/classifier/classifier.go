@@ -223,10 +223,6 @@ func (c *Classifier) classifyServiceSliceChild(ctx context.Context, context clas
 	if strings.HasSuffix(name, serviceSuffix) {
 		service := trim("", name, serviceSuffix)
 
-		// It has a non-standard cgroups configuration
-		if service == "systemd-udevd" {
-		}
-
 		// We can have here:
 		// * A regular systemd unit
 		// * systemd-udevd with non-standard cgroups configuration

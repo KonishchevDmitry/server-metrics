@@ -52,7 +52,7 @@ type prometheusLogger struct {
 	logger *zap.SugaredLogger
 }
 
-func (l prometheusLogger) Println(v ...interface{}) {
+func (l prometheusLogger) Println(v ...any) {
 	logger, dump := l.logger.Errorf, true
 
 	for _, value := range v {
