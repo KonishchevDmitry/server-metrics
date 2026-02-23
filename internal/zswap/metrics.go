@@ -7,7 +7,7 @@ import (
 var metricBuilder = metrics.MakeDescBuilder("kernel_zswap")
 
 var enabledMetric = metricBuilder.Build(
-	"enabled", "Current zswap status.", []string{"zpool", "compressor"})
+	"enabled", "Current zswap status.", []string{"compressor"})
 
 var maxPoolPercentMetric = metricBuilder.Build(
 	"max_pool_percent", "The maximum percentage of memory that the compressed pool can occupy.", nil)

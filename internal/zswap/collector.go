@@ -67,11 +67,6 @@ func (c *Collector) observe(ctx context.Context, metrics chan<- prometheus.Metri
 		return fmt.Errorf("got an unexpected %q value: %q", enabledPath, enabledString)
 	}
 
-	zpool, err := readString(path.Join(parametersPath, "zpool"))
-	if err != nil {
-		return err
-	}
-
 	compressor, err := readString(path.Join(parametersPath, "compressor"))
 	if err != nil {
 		return err
@@ -137,14 +132,14 @@ func (c *Collector) observe(ctx context.Context, metrics chan<- prometheus.Metri
 	}
 
 	logging.L(ctx).Debugf("zswap:\n"+
-		"* status: enabled=%v, zpool=%s, compressor=%s, max_pool_percent=%.0f, pool_size=%0.f, stored_size=%0.f\n"+
+		"* status: enabled=%v, compressor=%s, max_pool_percent=%.0f, pool_size=%0.f, stored_size=%0.f\n"+
 		"* rejects: %s=%0.f, %s=%0.f, %s=%0.f\n"+
 		"* errors: %s=%0.f, %s=%0.f",
-		enabledValue == 1, zpool, compressor, maxPoolPercent, poolSize, storedSize,
+		enabledValue == 1, compressor, maxPoolPercent, poolSize, storedSize,
 		poolLimitReachedReject, poolLimitHits, allocationFailureReject, allocationFailureRejects, poorCompressionReject, poorCompressionRejects,
 		reclaimError, reclaimErrors, compressionError, compressionErrors)
 
-	metrics <- prometheus.MustNewConstMetric(enabledMetric, prometheus.GaugeValue, enabledValue, zpool, compressor)
+	metrics <- prometheus.MustNewConstMetric(enabledMetric, prometheus.GaugeValue, enabledValue, compressor)
 	metrics <- prometheus.MustNewConstMetric(maxPoolPercentMetric, prometheus.GaugeValue, maxPoolPercent)
 	metrics <- prometheus.MustNewConstMetric(poolSizeMetric, prometheus.GaugeValue, poolSize)
 	metrics <- prometheus.MustNewConstMetric(storedSizeMetric, prometheus.GaugeValue, storedSize)
