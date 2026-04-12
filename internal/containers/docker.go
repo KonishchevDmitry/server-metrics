@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 )
 
 type dockerResolver struct {
@@ -25,18 +25,18 @@ func (r *dockerResolver) Resolve(ctx context.Context, id string) (Container, err
 		return Container{}, err
 	}
 
-	info, err := cli.ContainerInspect(ctx, id)
+	info, err := cli.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
 	if err != nil {
 		return Container{}, err
 	}
 
 	var temporary bool
-	if hostConfig := info.HostConfig; hostConfig != nil {
+	if hostConfig := info.Container.HostConfig; hostConfig != nil {
 		temporary = hostConfig.AutoRemove
 	}
 
 	return Container{
-		Name:      strings.TrimLeft(info.Name, "/"),
+		Name:      strings.TrimLeft(info.Container.Name, "/"),
 		Temporary: temporary,
 	}, nil
 }
@@ -48,7 +48,7 @@ func (r *dockerResolver) getClient() (*client.Client, error) {
 	if r.client == nil {
 		var err error
 
-		r.client, err = client.NewClientWithOpts()
+		r.client, err = client.New()
 		if err != nil {
 			return nil, err
 		}
