@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 
 set -eu
-
 package=github.com/KonishchevDmitry/server-metrics
-src_dirs="$(realpath --no-symlinks --relative-to "$PWD" $(go list -f '{{.Dir}}' ./...))"
 
 # The tags reduce Podman bindings dependencies:
 # * containers_image_docker_daemon_stub, containers_image_openpgp – https://github.com/containers/image/blob/df7e80d2d19872b61f352a8a182ec934dc0c2346/README.md?plain=1#L63
+# * exclude_graphdriver_btrfs – https://github.com/containers/storage/blob/83cf57466529353aced8f1803f2302698e0b5cb7/drivers/register/register_btrfs.go#L1
 # * remote – https://github.com/containers/podman/blob/ef584d4d6d5b50d7eb48a785be6c954bb0abe5c6/pkg/bindings/README.md?plain=1#L243
-export GOFLAGS=-tags=containers_image_docker_daemon_stub,containers_image_openpgp,remote
+export GOFLAGS=-tags=containers_image_docker_daemon_stub,containers_image_openpgp,exclude_graphdriver_btrfs,remote
 
 go_args=(
     -v "$HOME/.cache/go-containers:/cache"
@@ -21,12 +20,24 @@ go_args=(
 
 set -x
 
-go get -u -t ./...
-go mod tidy
+# Podman bindings have a lot of tricky dependencies which constantly produce backward compatibility issues and attempt
+# to link with non-Go libraries. Due to this, `go get -u ./...` almost never works, so we use go.mod recreation as an
+# alternative instead.
+if true; then
+    rm -f go.{mod,sum}
+    go mod init "$package"
+
+    go get -t ./...
+    go get -tool github.com/daixiang0/gci
+else
+    go get -u -t ./...
+    go mod tidy
+fi
 
 docker run --pull always --rm -v "$PWD:/app" -w /app "${go_args[@]}" golang \
     go test ./...
 
+src_dirs="$(realpath --no-symlinks --relative-to "$PWD" $(go list -f '{{.Dir}}' ./...))"
 gofmt -s -w $src_dirs
 go tool gci write --section standard --section default --section "prefix($package)" $src_dirs
 
