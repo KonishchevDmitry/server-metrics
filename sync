@@ -20,19 +20,10 @@ go_args=(
 
 set -x
 
-# Podman bindings have a lot of tricky dependencies which constantly produce backward compatibility issues and attempt
-# to link with non-Go libraries. Due to this, `go get -u ./...` almost never works, so we use go.mod recreation as an
-# alternative instead.
-if true; then
-    rm -f go.{mod,sum}
-    go mod init "$package"
-
-    go get -t ./...
-    go get -tool github.com/daixiang0/gci
-else
-    go get -u -t ./...
-    go mod tidy
-fi
+# Podman bindings have a lot of tricky dependencies which constantly produce backward compatibility issues. Due to this,
+#`go get -u -t ./...` almost never works, so we use a less intrusive way instead.
+go get -u $(go list -m -f '{{if not (or .Main .Indirect)}}{{.Path}}{{end}}' all)
+go mod tidy
 
 docker run --pull always --rm -v "$PWD:/app" -w /app "${go_args[@]}" golang \
     go test ./...
