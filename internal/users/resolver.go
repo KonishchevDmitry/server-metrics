@@ -35,8 +35,7 @@ func (r *resolver) Resolve(id int) (string, error) {
 
 	user, err := users.LookupId(strconv.Itoa(id))
 	if err != nil {
-		var unknownUserIDError users.UnknownUserIdError
-		if errors.As(err, &unknownUserIDError) {
+		if _, ok := errors.AsType[users.UnknownUserIdError](err); ok {
 			err = xerrors.New("Invalid user ID")
 		}
 		return "", err
